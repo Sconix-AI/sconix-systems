@@ -19,16 +19,19 @@ Both run on one Hetzner box (CX22/CAX11, ~€4–7/mo), many-apps-per-box per ST
 
 ## Phase 1b — batteries (build before App #1 needs them)
 
-### `sconixapp.billing`
-- Stripe: checkout session, customer portal, webhook handler (`checkout.session.completed`, `customer.subscription.*`), entitlement gate (`require_plan("pro")` FastAPI dependency).
-- Tables: `customers` (user_id ↔ stripe_customer_id), `subscriptions` (status, plan, current_period_end).
-- Stripe = source of truth; webhook writes local rows; gate reads local rows.
-- Test mode first; one `pro` plan, monthly.
+### `sconixapp.billing` — ✅ built (commit dc4ed40)
+- `build_billing_router(get_user_id=, settings=, default_price_id=)` → `POST /api/billing/{checkout,portal,webhook}`.
+- `require_plan("pro", get_user_id=)` FastAPI dependency → 402 unless a live sub on that plan.
+- Tables `BillingCustomer` (user_id ↔ stripe_customer_id), `Subscription` (status, plan, current_period_end); tz-aware timestamps. App re-exports them for Alembic autogenerate.
+- Stripe = source of truth; webhook (`checkout.session.completed`, `customer.subscription.*`) writes local rows; `require_plan` reads local rows. Sync stripe calls run off the loop via `run_in_threadpool`.
+- Extra: `sconixapp[billing]` → `stripe`. Settings: `stripe_secret_key`, `stripe_webhook_secret`, `stripe_price_id`.
 
-### `sconixapp.agent`
-- Thin wrapper over the Anthropic SDK **Tool Runner** (`client.beta.messages.tool_runner` + `@beta_tool`). No platform, in-process.
-- Provides: tool registry, `structlog` per-turn tracing, token/cost accounting into a `agent_runs` table, effort defaults, per-user monthly token ceiling with soft-degrade (Sonnet/Opus → Haiku past the cap).
-- Model policy: Haiku for navigation/status, Sonnet for the main job, Opus only for one-shot planning. Prompt-cache the stable prefix (repo context / rubric) on every turn.
+### `sconixapp.agent` — ✅ built (commit dc4ed40)
+- `run_agent(client=, session=, user_id=, area=, model=, system=, messages=, tools=, effort="high")` drives `client.beta.messages.tool_runner`, accounts every turn, writes an `AgentRun` row (turns, in/out/cache tokens, `cost_usd`, `duration_ms`, status), returns `AgentResult(text, run, messages)`. Errors still write the row, then re-raise.
+- `pick_model(session, user_id, preferred, ceiling=)` → soft-degrades to `NAV` (Haiku) past the monthly token ceiling. `monthly_tokens()` sums this calendar month.
+- Constants `PLANNER`=opus-5, `WORKER`=sonnet-5, `NAV`=haiku-4-5. `cost_usd()` priced per model (cache reads ~0.1× input).
+- Extra: `sconixapp[agent]` → `anthropic`. Settings: `anthropic_api_key`, `agent_token_ceiling` (0 = off).
+- **TODO in the app:** register tools as `@beta_async_tool`; add `cache_control` on the stable system/prefix.
 
 ## App #1 — Relnotes
 
