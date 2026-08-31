@@ -175,21 +175,35 @@ def plan_of(stripe_subscription: dict[str, Any]) -> str:
     return "pro"
 
 
-async def _upsert_subscription(session: AsyncSession, sub: dict[str, Any]) -> None:
+def _period_end(sub: Any) -> datetime:
+    """``current_period_end`` moved from the Subscription onto its items in the
+    2025+ API versions; fall back to the top-level field for older ones."""
+    items = (sub.get("items") or {}).get("data") or []
+    ts = None
+    if items:
+        ts = items[0].get("current_period_end")
+    if ts is None:
+        ts = sub.get("current_period_end")
+    return datetime.fromtimestamp(int(ts), tz=UTC) if ts else _utcnow()
+
+
+async def _upsert_subscription(session: AsyncSession, sub: Any) -> None:
+    """``sub`` is a Stripe ``Subscription`` object or an equivalent mapping."""
+    customer_id = sub["customer"]
     cust = (
         await session.execute(
-            select(BillingCustomer).where(BillingCustomer.stripe_customer_id == sub["customer"])
+            select(BillingCustomer).where(BillingCustomer.stripe_customer_id == customer_id)
         )
     ).scalar_one_or_none()
     if cust is not None:
         user_id = cust.user_id
     else:  # customer created out-of-band — fall back to its metadata
-        c = await _call(stripe.Customer.retrieve, id=sub["customer"])
+        c = await _call(stripe.Customer.retrieve, id=customer_id)
         user_id = (c.get("metadata") or {}).get("user_id")
         if user_id:
-            session.add(BillingCustomer(user_id=user_id, stripe_customer_id=sub["customer"]))
+            session.add(BillingCustomer(user_id=user_id, stripe_customer_id=customer_id))
     if not user_id:
-        log.warning("billing.webhook.no_user", customer=sub["customer"])
+        log.warning("billing.webhook.no_user", customer=customer_id)
         return
 
     values = {
@@ -197,7 +211,7 @@ async def _upsert_subscription(session: AsyncSession, sub: dict[str, Any]) -> No
         "stripe_subscription_id": sub["id"],
         "status": sub["status"],
         "plan": plan_of(sub),
-        "current_period_end": datetime.fromtimestamp(sub["current_period_end"], tz=UTC),
+        "current_period_end": _period_end(sub),
         "updated_at": _utcnow(),
     }
     existing = (
@@ -223,13 +237,13 @@ async def handle_webhook(
         raise HTTPException(400, f"invalid webhook: {exc.__class__.__name__}") from exc
 
     etype = event["type"]
-    obj = dict(event["data"]["object"])
+    obj = event["data"]["object"]  # a Stripe resource object — don't dict() it
 
     if etype.startswith("customer.subscription."):
         await _upsert_subscription(session, obj)
     elif etype == "checkout.session.completed" and obj.get("subscription"):
         full = await _call(stripe.Subscription.retrieve, id=obj["subscription"])
-        await _upsert_subscription(session, dict(full))
+        await _upsert_subscription(session, full)
     else:
         log.debug("billing.webhook.ignored", type=etype)
     return etype

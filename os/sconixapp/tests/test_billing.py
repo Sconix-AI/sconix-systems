@@ -57,6 +57,19 @@ def test_subscription_is_live() -> None:
     ).is_live
 
 
+def test_period_end_reads_item_then_top_level() -> None:
+    from sconixapp.billing import _period_end
+
+    # 2025+ shape: on the item
+    d1 = _period_end({"items": {"data": [{"current_period_end": 1_800_000_000}]}})
+    assert d1.year == 2027 and d1.tzinfo is not None
+    # legacy shape: top-level
+    d2 = _period_end({"items": {"data": []}, "current_period_end": 1_800_000_000})
+    assert d2 == d1
+    # neither -> now, not a crash
+    assert _period_end({}).tzinfo is not None
+
+
 def test_plan_of_prefers_lookup_key_then_metadata_then_default() -> None:
     assert plan_of({"items": {"data": [{"price": {"lookup_key": "team"}}]}}) == "team"
     assert plan_of({"items": {"data": [{"price": {"metadata": {"plan": "starter"}}}]}}) == "starter"
