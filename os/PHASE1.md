@@ -19,7 +19,12 @@ Both run on one Hetzner box (CX22/CAX11, ~€4–7/mo), many-apps-per-box per ST
 
 ## Phase 1b — batteries (build before App #1 needs them)
 
-### `sconixapp.billing` — ✅ built (commit dc4ed40)
+### `sconixapp.billing` — ✅ built + **billing loop verified live** (2026-08-31, Stripe test mode)
+- checkout → Stripe → webhook (sig verify → parse → upsert) → local `Subscription` row → gate. `/api/usage` shows `plan:"pro", limit:null`; a free client at 5 releases gets 402; the Pro client bypasses it.
+- 4 battery bugs found + fixed with regression tests: (1) `from __future__ import annotations` broke `app.openapi()` (function-local Annotated dep → ForwardRef); (2) `dict(stripe_object)` raises in stripe-python 15 → parse the verified payload as plain JSON; (3) `current_period_end` moved onto subscription *items* in 2025+ API versions; (4) `is_live` crashed comparing SQLite-naive vs aware datetime.
+- Stripe test setup done: product **Relnotes Pro** `prod_VAjMcxZaYqNWLw`, price **$12/mo** `lookup_key=pro`. Keys in `~/.config/sconix-keys.env` (local) — move to `secrets.env` for deploy.
+
+### `sconixapp.billing` — original build (commit dc4ed40)
 - `build_billing_router(get_user_id=, settings=, default_price_id=)` → `POST /api/billing/{checkout,portal,webhook}`.
 - `require_plan("pro", get_user_id=)` FastAPI dependency → 402 unless a live sub on that plan.
 - Tables `BillingCustomer` (user_id ↔ stripe_customer_id), `Subscription` (status, plan, current_period_end); tz-aware timestamps. App re-exports them for Alembic autogenerate.
