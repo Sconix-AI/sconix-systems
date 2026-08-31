@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Generate a throwaway app from template-web and assert the api half is sane.
+# Generate a throwaway app from template-web and assert both halves are sane.
+# Set SKIP_WEB=1 to skip the (slower) pnpm install + next build.
 set -euo pipefail
 
 OS="$HOME/systems/os"
@@ -19,14 +20,21 @@ echo ":: generated -> $PWD"
 test -f api/pyproject.toml
 test -f web/package.json
 test -f docker-compose.yml
-test -f Caddyfile
+test -f Caddyfile.site
 # leaked Jinja looks like `{{ var }}` / `{% ... %}` / `{# ... #}`; JSX inline
 # objects (`={{`, `{{ ... }}` without a bare identifier) are fine.
 ! grep -rnE '\{\{ [a-z_]+ \}\}|\{%[-+ ]|\{#' api web packages \
   || { echo "unrendered jinja left in output"; exit 1; }
 
+test -f web/lib/config.ts        # config.ts.jinja must have rendered
+
 TMPDIR=/tmp uv sync --project api
 uv run --project api ruff check api
 TMPDIR=/tmp uv run --project api pytest api
-
 echo ":: template api OK"
+
+if [ "${SKIP_WEB:-}" != "1" ]; then
+  TMPDIR=/tmp pnpm install --silent
+  TMPDIR=/tmp pnpm --filter web build
+  echo ":: template web OK"
+fi

@@ -155,7 +155,50 @@ REMOTE
       ssh "$target" 'command -v sops >/dev/null || { sudo curl -fsSL -o /usr/local/bin/sops https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.amd64 && sudo chmod +x /usr/local/bin/sops; }'
       ssh "$target" 'umask 077; mkdir -p ~/.config/sops; cat > ~/.config/sops/age-key.txt' < "$OS/.age/keys.txt"
     fi
+    "$0" edge "$target"
     echo ":: done. Re-login on the box once so the docker group applies."
+    ;;
+
+  edge)
+    # One shared Caddy per box: terminates TLS for every app, routes by domain.
+    # Apps join the `sconix_edge` network and drop a site file in /srv/edge/sites/.
+    target="${1:?usage: sx edge user@host}"
+    echo ":: setting up the shared edge on $target"
+    ssh "$target" 'bash -s' <<'REMOTE'
+set -euo pipefail
+docker network inspect sconix_edge >/dev/null 2>&1 || docker network create sconix_edge
+mkdir -p /srv/edge/sites /srv/edge/data /srv/edge/config
+cat > /srv/edge/Caddyfile <<'CADDY'
+{
+	admin 0.0.0.0:2019
+}
+import /srv/edge/sites/*.caddy
+CADDY
+[ "$(ls -A /srv/edge/sites 2>/dev/null)" ] || cat > /srv/edge/sites/_placeholder.caddy <<'CADDY'
+# apps add <app>.caddy here via `sx deploy`
+:9999 { respond "edge up" }
+CADDY
+cat > /srv/edge/compose.yml <<'YML'
+name: sconix-edge
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: sconix-edge
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    networks: [sconix_edge]
+    volumes:
+      - /srv/edge/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /srv/edge/sites:/srv/edge/sites:ro
+      - /srv/edge/data:/data
+      - /srv/edge/config:/config
+networks:
+  sconix_edge:
+    external: true
+YML
+cd /srv/edge && docker compose up -d && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || true
+echo "edge OK"
+REMOTE
     ;;
 
   deploy)
@@ -196,10 +239,13 @@ REMOTE
     echo ":: build + up (profile prod) on $host"
     ssh "$host" "cd /srv/$proj && grep -q '^APP_DOMAIN=' .env || echo 'APP_DOMAIN=$APP_DOMAIN' >> .env; docker compose --profile prod build && docker compose --profile prod up -d"
 
-    # Caddyfile is a bind-mounted volume — `up -d` won't recreate caddy on a config-only
-    # change, so reload it explicitly (no-op if the container was just recreated).
-    echo ":: reload caddy"
-    ssh "$host" "cd /srv/$proj && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || docker compose --profile prod up -d --force-recreate caddy"
+    # Register this app's site with the shared edge Caddy and reload it.
+    echo ":: register $APP_DOMAIN with the edge"
+    ssh "$host" "set -e
+      test -f /srv/$proj/Caddyfile.site || { echo 'no Caddyfile.site — old-style app? redeploy after sx sync'; exit 1; }
+      sed 's|__DOMAIN__|$APP_DOMAIN|g' /srv/$proj/Caddyfile.site > /srv/edge/sites/$proj.caddy
+      rm -f /srv/edge/sites/_placeholder.caddy
+      docker compose -f /srv/edge/compose.yml exec -T caddy caddy reload --config /etc/caddy/Caddyfile"
 
     echo ":: migrate"
     ssh "$host" "cd /srv/$proj && docker compose exec -T api alembic -c api/alembic.ini upgrade head"
