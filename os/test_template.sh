@@ -20,7 +20,10 @@ test -f api/pyproject.toml
 test -f web/package.json
 test -f docker-compose.yml
 test -f Caddyfile
-! grep -rq '{{' api web packages || { echo "unrendered jinja left in output"; exit 1; }
+# leaked Jinja looks like `{{ var }}` / `{% ... %}` / `{# ... #}`; JSX inline
+# objects (`={{`, `{{ ... }}` without a bare identifier) are fine.
+! grep -rnE '\{\{ [a-z_]+ \}\}|\{%[-+ ]|\{#' api web packages \
+  || { echo "unrendered jinja left in output"; exit 1; }
 
 TMPDIR=/tmp uv sync --project api
 uv run --project api ruff check api
