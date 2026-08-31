@@ -169,6 +169,11 @@ REMOTE
     echo ":: build + up (profile prod) on $host"
     ssh "$host" "cd /srv/$proj && grep -q '^APP_DOMAIN=' .env || echo 'APP_DOMAIN=$APP_DOMAIN' >> .env; docker compose --profile prod build && docker compose --profile prod up -d"
 
+    # Caddyfile is a bind-mounted volume — `up -d` won't recreate caddy on a config-only
+    # change, so reload it explicitly (no-op if the container was just recreated).
+    echo ":: reload caddy"
+    ssh "$host" "cd /srv/$proj && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || docker compose --profile prod up -d --force-recreate caddy"
+
     echo ":: migrate"
     ssh "$host" "cd /srv/$proj && docker compose exec -T api alembic -c api/alembic.ini upgrade head"
 
