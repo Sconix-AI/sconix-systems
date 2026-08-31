@@ -230,7 +230,8 @@ REMOTE
     echo ":: sync $proj -> $host:/srv/$proj"
     rsync -az --delete \
       --exclude .git --exclude node_modules --exclude .venv --exclude .next \
-      --exclude __pycache__ --exclude '*.db' --exclude .turbo $secrets_rsync \
+      --exclude __pycache__ --exclude '*.db' --exclude .turbo \
+      --exclude docker-compose.override.yml $secrets_rsync \
       "$dir/" "$host:/srv/$proj/"
 
     if [ -f "$dir/secrets.env" ]; then
