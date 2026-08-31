@@ -50,8 +50,15 @@ Both run on one Hetzner box (CX22/CAX11, ~€4–7/mo), many-apps-per-box per ST
 - [x] Migration (tz-aware) generated + applied on sqlite; 5 tables.
 - [x] Web: one page — repo / base / head / tone → notes + copy + `used/limit` line + Upgrade button.
 - [x] **Live generation verified** (2026-08-31): `astral-sh/ruff 0.6.0...0.6.1` → 14 PRs → structured notes in ~10s, **$0.0105** on `claude-sonnet-5` (2598 in / 527 out). `usage` counter + `agent_runs` row both written. Needs `ANTHROPIC_API_KEY` in `.env` / `secrets.env`.
+- [x] **DEPLOYED + LIVE** (2026-08-31): `sx deploy relnotes` → Hetzner **cx23** (€6.49/mo, hel1) at
+      **https://relnotes.204-168-172-115.sslip.io**. Caddy auto-TLS, Postgres+Redis. Prod-verified:
+      generation ($0.01/run), rate limit, and the **full Stripe billing loop** — checkout → registered
+      webhook (`we_1UAOG4…`, test mode) → `billing_subscriptions` row → Pro gate; free client 402 at 5/mo.
+      Box mem 0.9G/3.7G used. Fixed 1 more factory bug → template **v0.2.3** (api Dockerfile now installs
+      `sconixapp[extras]` — was dropping stripe/anthropic).
+- [ ] Real domain (Porkbun + Cloudflare) to replace the sslip.io URL.
+- [ ] Move to Stripe **live** keys when ready to charge (currently test mode).
 - [ ] GitHub App / Action + REST token (the sticky distribution) — v2.
-- [ ] Deploy to a box + real domain (Porkbun + Cloudflare).
 - [ ] Model tiering: currently `WORKER` (sonnet-5) at `effort="medium"`, `pick_model` degrades to Haiku past `agent_token_ceiling`. Add `cache_control` on the system prefix. Consider Haiku for small PR sets.
 
 **Cost:** one completion per release, `effort=medium`, `max_tokens=4000`. Expect << $0.05/run on Sonnet.
