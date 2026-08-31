@@ -5,11 +5,13 @@ See `STACK.md` for the locked stack. This is build order.
 ## Phase 0 — factory skeleton  (in progress, started 2026-08-30)
 
 - [x] `~/systems/` tree, `STACK.md`, `ledger.md`, `inbox.md`
-- [x] `sconixapp` package: `config`, `db`, `security`, `logging`, `health` — installs `--editable`, `task test` green
-- [x] `sx` CLI: `doctor`, `new`, `ls`, `cap`, `ledger`
-- [ ] `template-web` — Copier template -> deployable monorepo (`api/` + `web/` + `packages/`)
-- [ ] `sx new demoapp` produces a repo where `task setup` + `task dev` work locally
-- [ ] engine regression test (`~/systems/os && task test`)
+- [x] `sconixapp` package: `config`, `db`, `security`, `logging`, `health` — installs `--editable`, 7 tests green
+- [x] `sx` CLI: `doctor`, `new`, `ls`, `cap`, `ledger`, `sync`, `gen`, `deploy` (stub)
+- [x] `template-web` v0.1.0 (own git repo, tagged) -> `api/` (FastAPI + sconixapp + Alembic) + `web/` (Next 16 + Tailwind v4) + `packages/` (api-client, shared, tsconfig)
+- [x] `sx new` verified end-to-end; `~/systems/os && task test` green (lib + copier-generate + uv sync + ruff + pytest)
+- [ ] `task dev` / `task setup` fully exercised locally — **blocked on Docker in WSL** (postgres/redis containers)
+- [ ] install `sops` + `age` (substrate secrets — currently MISSING per `sx doctor`)
+- [ ] first Alembic migration generated from `models.py`; web `pnpm install` + `next build` verified
 
 ## Phase 1 — first real app
 
