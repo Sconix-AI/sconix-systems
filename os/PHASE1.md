@@ -56,8 +56,11 @@ Both run on one Hetzner box (CX22/CAX11, ~€4–7/mo), many-apps-per-box per ST
       webhook (`we_1UAOG4…`, test mode) → `billing_subscriptions` row → Pro gate; free client 402 at 5/mo.
       Box mem 0.9G/3.7G used. Fixed 1 more factory bug → template **v0.2.3** (api Dockerfile now installs
       `sconixapp[extras]` — was dropping stripe/anthropic).
+- [x] **Finished product UI** (2026-08-31): real header (usage + Upgrade/Manage-billing), hero,
+      generator card, result + copy, **Recent runs** list, 402 upgrade card, post-checkout toast.
+      `@app/ui` throughout; `/ui` showcase removed from the product. **Ready to invite users** (on sslip.io).
 - [ ] Real domain (Porkbun + Cloudflare) to replace the sslip.io URL.
-- [ ] Move to Stripe **live** keys when ready to charge (currently test mode).
+- [ ] Move to Stripe **live** keys when ready to actually charge (currently test mode).
 - [ ] GitHub App / Action + REST token (the sticky distribution) — v2.
 - [ ] Model tiering: currently `WORKER` (sonnet-5) at `effort="medium"`, `pick_model` degrades to Haiku past `agent_token_ceiling`. Add `cache_control` on the system prefix. Consider Haiku for small PR sets.
 
