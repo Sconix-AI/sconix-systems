@@ -29,6 +29,7 @@ on the base :class:`sconixapp.Settings`).
 # under PEP 563 it becomes an unresolvable ForwardRef and OpenAPI generation
 # blows up. Keeping annotations eager avoids that.
 
+import json
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Annotated, Any
@@ -105,6 +106,14 @@ def configure_stripe(secret_key: str | None) -> None:
 async def _call(fn: Callable[..., Any], /, **kwargs: Any) -> Any:
     """Run a blocking stripe SDK call off the event loop."""
     return await run_in_threadpool(lambda: fn(**kwargs))
+
+
+def _plain(obj: Any) -> dict[str, Any]:
+    """A nested plain dict from a Stripe resource. stripe-python >= 8 raises on
+    ``dict(obj)`` / ``obj.get(...)``; ``str(obj)`` is its JSON form."""
+    if isinstance(obj, dict):
+        return obj
+    return json.loads(str(obj))
 
 
 async def _customer_id(session: AsyncSession, user_id: str, email: str | None) -> str:
@@ -232,18 +241,19 @@ async def handle_webhook(
 ) -> str:
     """Verify + apply one Stripe webhook event. Returns the event type."""
     try:
-        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+        stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
     except (ValueError, SignatureVerificationError) as exc:
         raise HTTPException(400, f"invalid webhook: {exc.__class__.__name__}") from exc
 
+    event = json.loads(payload)  # verified above; use plain dicts, not StripeObjects
     etype = event["type"]
-    obj = event["data"]["object"]  # a Stripe resource object — don't dict() it
+    obj = event["data"]["object"]
 
     if etype.startswith("customer.subscription."):
         await _upsert_subscription(session, obj)
     elif etype == "checkout.session.completed" and obj.get("subscription"):
         full = await _call(stripe.Subscription.retrieve, id=obj["subscription"])
-        await _upsert_subscription(session, full)
+        await _upsert_subscription(session, _plain(full))
     else:
         log.debug("billing.webhook.ignored", type=etype)
     return etype
