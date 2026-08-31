@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+# Sconix Systems — one command. Thin on purpose. Mirrors ~/research/os/bin/sconix.
+set -euo pipefail
+
+OS="$HOME/systems/os"
+APPS="$HOME/systems/apps"
+SYSTEMS="$HOME/systems"
+TEMPLATE="$OS/template-web"
+APPLIB="$OS/sconixapp"
+
+usage() {
+  cat <<'EOF'
+sx — Sconix Systems
+
+  sx new <name> ["one-line pitch"] [--no-gh]
+                          scaffold an app in ~/systems/apps/ from template-web
+                          (creates a private GitHub repo unless --no-gh)
+  sx ls                   list apps + their status
+  sx cap  <text...>       drop an idea into ~/systems/inbox.md
+  sx ledger <text...>     add a dated note to ~/systems/ledger.md
+  sx sync <app>           re-apply template-web (pull in engine/template updates)
+  sx gen  <app>           regenerate packages/api-client from the FastAPI OpenAPI spec
+  sx deploy <app> [env]   build + ship to the Hetzner box   (NOT WIRED YET — see ROADMAP)
+  sx doctor               check the toolchain
+EOF
+}
+
+slugify() { echo "$1" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9-' | sed 's/^-*//;s/-*$//'; }
+
+read_answer() { awk -F'\t' -v k="$2" '$1==k{print $2; exit}' "$1"; }
+
+cmd="${1:-}"; shift || true
+
+case "$cmd" in
+  new)
+    name="${1:?usage: sx new \"Name\" [\"pitch\"] [--no-gh]}"; shift
+    gh=true pitch=""
+    for a in "$@"; do
+      case "$a" in
+        --no-gh) gh=false ;;
+        *) pitch="$a" ;;
+      esac
+    done
+    slug="$(slugify "$name")"
+    module="$(echo "$slug" | tr '-' '_')"
+    dest="$APPS/$slug"
+    [ -e "$dest" ] && { echo "already exists: $dest"; exit 1; }
+    mkdir -p "$APPS"
+    copier copy --trust --defaults \
+      --data app_name="$name" \
+      --data app_slug="$slug" \
+      --data module_name="$module" \
+      --data pitch="$pitch" \
+      --data sconixapp_path="$APPLIB" \
+      --data created_at="$(date -Idate)" \
+      "$TEMPLATE" "$dest"
+    {
+      printf 'app_name\t%s\n' "$name"
+      printf 'app_slug\t%s\n' "$slug"
+      printf 'module_name\t%s\n' "$module"
+      printf 'pitch\t%s\n' "$pitch"
+    } > "$dest/.sx-answers"
+    git -C "$dest" init -q && git -C "$dest" add -A && git -C "$dest" commit -qm "scaffold $slug" || true
+    if [ "$gh" = true ] && command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
+      gh repo create "$slug" --private --source "$dest" --remote origin --push \
+        && echo "   github: $(gh repo view "$slug" --json url -q .url 2>/dev/null)" \
+        || echo "   (skipped GitHub repo — 'gh repo create $slug' failed)"
+    fi
+    echo
+    echo "-> $dest"
+    echo "   cd ~/systems/apps/$slug && task setup && task dev"
+    ;;
+
+  ls)
+    [ -d "$APPS" ] || { echo "no apps yet"; exit 0; }
+    for p in "$APPS"/*/; do
+      [ -d "$p" ] || continue
+      s=$(grep -m1 '^status:' "$p/app.yaml" 2>/dev/null | awk '{print $2}')
+      printf "  %-28s %s\n" "$(basename "$p")" "${s:-?}"
+    done
+    ;;
+
+  cap)
+    [ $# -gt 0 ] || { echo "nothing to capture"; exit 1; }
+    printf -- '- [ ] %s  _(%s)_\n' "$*" "$(date '+%Y-%m-%d %H:%M')" >> "$SYSTEMS/inbox.md"
+    echo "captured."
+    ;;
+
+  ledger)
+    [ $# -gt 0 ] || { echo "nothing to log"; exit 1; }
+    printf -- '- **%s** — %s\n' "$(date '+%Y-%m-%d')" "$*" >> "$SYSTEMS/ledger.md"
+    echo "logged."
+    ;;
+
+  sync)
+    proj="${1:?usage: sx sync <app>}"
+    dir="$APPS/$proj"
+    [ -f "$dir/.sx-answers" ] || { echo "no .sx-answers in $dir"; exit 1; }
+    ( cd "$dir" && git diff --quiet && git diff --cached --quiet ) || { echo "commit/stash changes in $proj first"; exit 1; }
+    copier copy --trust --overwrite --defaults \
+      --data app_name="$(read_answer "$dir/.sx-answers" app_name)" \
+      --data app_slug="$proj" \
+      --data module_name="$(read_answer "$dir/.sx-answers" module_name)" \
+      --data pitch="$(read_answer "$dir/.sx-answers" pitch)" \
+      --data sconixapp_path="$APPLIB" \
+      --data created_at="$(grep -m1 '^created:' "$dir/app.yaml" 2>/dev/null | awk '{print $2}')" \
+      "$TEMPLATE" "$dir"
+    echo "synced. review with: git -C $dir diff"
+    ;;
+
+  gen)
+    proj="${1:?usage: sx gen <app>}"
+    dir="$APPS/$proj"
+    [ -d "$dir" ] || { echo "no such app: $proj"; exit 1; }
+    ( cd "$dir" && pnpm run gen:api )
+    ;;
+
+  deploy)
+    proj="${1:?usage: sx deploy <app> [env]}"
+    env="${2:-prod}"
+    cat <<EOF
+sx deploy is NOT WIRED YET (Phase 1 in ROADMAP.md).
+
+When it is, this will:
+  1. require a clean git tree, tag the commit
+  2. trigger the GitHub Actions build (api + web images -> GHCR)
+  3. ssh deploy@<hetzner> "cd /srv/$proj && docker compose pull && docker compose up -d"
+  4. run alembic migrations in the api container
+  5. append a line to ~/systems/ledger.md
+
+For now, deploy $proj ($env) by hand per the app's README "Deploy" section.
+EOF
+    exit 1
+    ;;
+
+  doctor)
+    echo "Sconix Systems — doctor"
+    for t in node pnpm uv copier ruff task gh git sops age docker caddy; do
+      printf "  %-9s " "$t"
+      if command -v "$t" >/dev/null; then
+        "$t" --version 2>/dev/null | head -1
+      else
+        echo "MISSING"
+      fi
+    done
+    printf "  %-9s " "dockerd"
+    docker info --format '{{.ServerVersion}}' >/dev/null 2>&1 && echo "running" || echo "not reachable"
+    printf "  %-9s " "template"
+    [ -f "$TEMPLATE/copier.yml" ] && echo "template-web ok" || echo "MISSING $TEMPLATE/copier.yml"
+    printf "  %-9s " "applib"
+    [ -f "$APPLIB/pyproject.toml" ] && echo "sconixapp ok" || echo "MISSING $APPLIB"
+    printf "  %-9s " "apps"
+    echo "$(find "$APPS" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l) scaffolded"
+    ;;
+
+  ""|-h|--help|help) usage ;;
+  *) echo "unknown: $cmd"; usage; exit 1 ;;
+esac

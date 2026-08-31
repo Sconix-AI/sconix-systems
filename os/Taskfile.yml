@@ -1,0 +1,19 @@
+# Regression tests for the systems engine itself.
+version: "3"
+
+tasks:
+  test:
+    desc: Test sconixapp + generate a demo app and check it lints/imports
+    cmds:
+      - task: test-lib
+      - task: test-template
+
+  test-lib:
+    dir: sconixapp
+    cmds:
+      - TMPDIR=/tmp uv run pytest
+
+  test-template:
+    desc: copier-generate a throwaway app, uv sync + ruff + pytest the api
+    cmds:
+      - bash test_template.sh

@@ -1,0 +1,8 @@
+os/template-web/
+os/sconixapp/.venv/
+os/sconixapp/.ruff_cache/
+os/sconixapp/.pytest_cache/
+os/sconixapp/uv.lock
+apps/
+**/__pycache__/
+**/*.pyc

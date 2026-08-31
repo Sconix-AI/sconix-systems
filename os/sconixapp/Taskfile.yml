@@ -1,0 +1,11 @@
+version: "3"
+
+tasks:
+  test:
+    cmds:
+      - TMPDIR=/tmp uv run pytest
+  lint:
+    cmds:
+      - uv run ruff format .
+      - uv run ruff check --fix .
+      - TMPDIR=/tmp uv run pytest
