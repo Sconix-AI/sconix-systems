@@ -20,7 +20,10 @@ sx — Sconix Systems
   sx ledger <text...>     add a dated note to ~/systems/ledger.md
   sx sync <app>           re-apply template-web (pull in engine/template updates)
   sx gen  <app>           regenerate packages/api-client from the FastAPI OpenAPI spec
-  sx deploy <app> [env]   build + ship to the Hetzner box   (NOT WIRED YET — see ROADMAP)
+  sx provision user@host  install docker + firewall + /srv on a fresh VPS (run once)
+  sx deploy <app> [user@host]
+                          rsync -> build -> up -> migrate -> health-check
+                          (reads apps/<app>/deploy.env: DEPLOY_HOST, APP_DOMAIN)
   sx doctor               check the toolchain
 EOF
 }
@@ -115,22 +118,62 @@ case "$cmd" in
     ( cd "$dir" && pnpm run gen:api )
     ;;
 
+  provision)
+    target="${1:?usage: sx provision user@host}"
+    echo ":: provisioning $target (docker + firewall + /srv)"
+    ssh "$target" 'bash -s' <<'REMOTE'
+set -euo pipefail
+if ! command -v docker >/dev/null; then
+  curl -fsSL https://get.docker.com | sh
+fi
+systemctl enable --now docker
+id -nG "$USER" | grep -qw docker || sudo usermod -aG docker "$USER" || true
+sudo mkdir -p /srv && sudo chown "$USER" /srv
+if command -v ufw >/dev/null; then
+  sudo ufw allow OpenSSH || true
+  sudo ufw allow 80/tcp || true
+  sudo ufw allow 443/tcp || true
+  sudo ufw --force enable || true
+fi
+docker --version
+echo "provisioned OK"
+REMOTE
+    echo ":: done. Re-login on the box once so the docker group applies."
+    ;;
+
   deploy)
-    proj="${1:?usage: sx deploy <app> [env]}"
-    env="${2:-prod}"
-    cat <<EOF
-sx deploy is NOT WIRED YET (Phase 1 in ROADMAP.md).
+    proj="${1:?usage: sx deploy <app> [user@host]}"
+    dir="$APPS/$proj"
+    [ -d "$dir" ] || { echo "no such app: $proj"; exit 1; }
+    # config: apps/<app>/deploy.env  ->  DEPLOY_HOST=user@ip   APP_DOMAIN=trim.sh
+    [ -f "$dir/deploy.env" ] && . "$dir/deploy.env"
+    host="${2:-${DEPLOY_HOST:-}}"
+    [ -n "$host" ] || { echo "no host — pass one or set DEPLOY_HOST in $dir/deploy.env"; exit 1; }
+    [ -n "${APP_DOMAIN:-}" ] || { echo "set APP_DOMAIN in $dir/deploy.env"; exit 1; }
+    ( cd "$dir" && git diff --quiet && git diff --cached --quiet ) || { echo "commit changes in $proj first"; exit 1; }
+    ( cd "$dir" && git push 2>/dev/null || true )
 
-When it is, this will:
-  1. require a clean git tree, tag the commit
-  2. trigger the GitHub Actions build (api + web images -> GHCR)
-  3. ssh deploy@<hetzner> "cd /srv/$proj && docker compose pull && docker compose up -d"
-  4. run alembic migrations in the api container
-  5. append a line to ~/systems/ledger.md
+    echo ":: sync $proj -> $host:/srv/$proj"
+    rsync -az --delete \
+      --exclude .git --exclude node_modules --exclude .venv --exclude .next \
+      --exclude __pycache__ --exclude '*.db' --exclude .turbo \
+      "$dir/" "$host:/srv/$proj/"
 
-For now, deploy $proj ($env) by hand per the app's README "Deploy" section.
-EOF
-    exit 1
+    echo ":: build + up (profile prod) on $host"
+    ssh "$host" "cd /srv/$proj && grep -q '^APP_DOMAIN=' .env || echo 'APP_DOMAIN=$APP_DOMAIN' >> .env; docker compose --profile prod build && docker compose --profile prod up -d"
+
+    echo ":: migrate"
+    ssh "$host" "cd /srv/$proj && docker compose exec -T api alembic -c api/alembic.ini upgrade head"
+
+    echo ":: health"
+    sleep 3
+    if curl -fsS --max-time 10 "https://$APP_DOMAIN/healthz" >/dev/null; then
+      echo "   https://$APP_DOMAIN/healthz OK"
+    else
+      echo "   WARN: health check failed (DNS not propagated / cert issuing?) — check: ssh $host 'cd /srv/$proj && docker compose logs --tail=50'"
+    fi
+    printf -- '- **%s** — deploy %s -> %s (%s)\n' "$(date '+%Y-%m-%d %H:%M')" "$proj" "$APP_DOMAIN" "$(git -C "$dir" rev-parse --short HEAD)" >> "$SYSTEMS/ledger.md"
+    echo ":: deployed. ledger updated."
     ;;
 
   doctor)

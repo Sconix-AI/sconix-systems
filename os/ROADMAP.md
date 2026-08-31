@@ -9,18 +9,25 @@ See `STACK.md` for the locked stack. This is build order.
 - [x] `sx` CLI: `doctor`, `new`, `ls`, `cap`, `ledger`, `sync`, `gen`, `deploy` (stub)
 - [x] `template-web` v0.1.0 (own git repo, tagged) -> `api/` (FastAPI + sconixapp + Alembic) + `web/` (Next 16 + Tailwind v4) + `packages/` (api-client, shared, tsconfig)
 - [x] `sx new` verified end-to-end; `~/systems/os && task test` green (lib + copier-generate + uv sync + ruff + pytest)
-- [ ] `task dev` / `task setup` fully exercised locally — **blocked on Docker in WSL** (postgres/redis containers)
-- [ ] install `sops` + `age` (substrate secrets — currently MISSING per `sx doctor`)
-- [ ] first Alembic migration generated from `models.py`; web `pnpm install` + `next build` verified
+- [x] SQLite path for zero-Docker local dev (db.py sqlite-aware, aiosqlite dep, `.env` default)
+- [x] first Alembic migration generated from `models.py` (trim); web `pnpm install` + `next build` verified
+- [ ] `task dev` full loop with Postgres — **blocked on Docker in WSL**
+- [ ] install `sops` + `age` (substrate secrets — MISSING per `sx doctor`)
 
-## Phase 1 — first real app
+## Phase 1 — first real app: `trim` (link shortener)
 
-- [ ] Docker available in WSL (Docker Desktop integration or engine in WSL)
-- [ ] Provision the Hetzner box: Docker, Caddy, GHCR auth, `deploy` user, ufw
-- [ ] `sx deploy` — build images in CI, push to GHCR, SSH + `compose up -d`
-- [ ] `sconixapp.billing` — Stripe checkout + customer portal + webhook + entitlement gate
+- [x] `trim` built: FastAPI create/list/redirect + click count, Next 16 UI, prod compose + Caddy
+- [x] `trim` API verified end-to-end locally (sqlite): create → 307 redirect → click count → stats
+- [x] `sx provision user@host` + `sx deploy <app>` written (rsync → build → migrate → health-check; reads `deploy.env`)
+- [ ] **user provides: a VPS (Hetzner/other) + SSH key + a domain** → then `sx provision` + `sx deploy trim`
+- [ ] Docker available in WSL (only needed to *build/test images locally*; deploy builds on the box)
+- [ ] stress test: `hey`/`wrk` against `https://<domain>/<code>`, watch `/api/stats` + `docker stats`
+- [ ] push `sconix-systems` + `sconix-template-web` to GitHub (blocked: harness classifier — user runs `gh repo create`)
+
+## Phase 1b — auth + billing (next app that needs them)
+
+- [ ] `sconixapp.billing` — Stripe checkout + portal + webhook + entitlement gate
 - [ ] `sconixapp.auth` wired: fastapi-users, Google OAuth, magic link, reset
-- [ ] Generate app #1, ship landing + waitlist
 
 ## Phase 2 — harden
 

@@ -18,7 +18,6 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, RedisDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["dev", "staging", "prod", "test"]
@@ -40,11 +39,11 @@ class Settings(BaseSettings):
     debug: bool = False
     base_url: str = "http://localhost:8000"
 
-    # --- data ------------------------------------------------------------
-    database_url: PostgresDsn = Field(
-        default="postgresql+asyncpg://postgres:postgres@localhost:5432/app",
-    )
-    redis_url: RedisDsn = Field(default="redis://localhost:6379/0")
+    # --- data ---------------------------------------------------------
+    # str, not PostgresDsn: prod is postgresql+asyncpg://, but zero-Docker
+    # local dev uses sqlite+aiosqlite:///./dev.db
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/app"
+    redis_url: str = "redis://localhost:6379/0"
 
     # --- auth ----------------------------------------------------------
     jwt_secret: str = "dev-insecure-change-me"
