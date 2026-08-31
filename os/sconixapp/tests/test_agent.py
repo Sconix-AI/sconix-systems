@@ -139,10 +139,20 @@ async def test_run_agent_records_a_run(session) -> None:
     assert result.run.status == "ok"
     assert result.run.cost_usd == cost_usd(WORKER, 1200, 340, 0)
     assert result.run.id is not None  # flushed
-    # the runner was asked for adaptive thinking + effort
+    # WORKER (sonnet-5) -> adaptive thinking + effort
     call = client.beta.messages.calls[0]
     assert call["thinking"] == {"type": "adaptive"}
     assert call["output_config"] == {"effort": "high"}
+
+
+async def test_haiku_omits_adaptive_thinking(session) -> None:
+    client = _FakeClient([_Msg("x", 1, 1)])
+    await run_agent(
+        client=client, session=session, user_id="u", area="a.b", model=NAV,
+        system="s", messages=[{"role": "user", "content": "go"}], tools=[],
+    )
+    call = client.beta.messages.calls[0]
+    assert "thinking" not in call and "output_config" not in call
 
 
 async def test_run_agent_with_tools_uses_the_runner(session) -> None:

@@ -52,6 +52,23 @@ _PRICING: dict[str, tuple[float, float, float]] = {
 }
 _DEFAULT_PRICING = _PRICING["claude-sonnet-5"]
 
+# Adaptive thinking + `output_config.effort` are Opus 4.6+ / Sonnet 4.6+ / Fable 5.
+# Haiku 4.5 and older reject both with a 400.
+_ADAPTIVE_PREFIXES = (
+    "claude-opus-5",
+    "claude-opus-4-6",
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-sonnet-5",
+    "claude-sonnet-4-6",
+    "claude-fable-5",
+    "claude-mythos-5",
+)
+
+
+def _supports_adaptive(model: str) -> bool:
+    return any(model.startswith(p) for p in _ADAPTIVE_PREFIXES)
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -152,9 +169,10 @@ async def run_agent(
         "max_tokens": max_tokens,
         "system": system,
         "messages": messages,
-        "thinking": {"type": "adaptive"},
-        "output_config": {"effort": effort},
     }
+    if _supports_adaptive(model):
+        create_kwargs["thinking"] = {"type": "adaptive"}
+        create_kwargs["output_config"] = {"effort": effort}
     if extra:
         create_kwargs.update(extra)
 

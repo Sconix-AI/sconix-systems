@@ -329,6 +329,17 @@ def build_billing_router(
         )
         return {"received": etype}
 
+    @router.get("/status")
+    async def status(session: SessionDep, user_id: UserId) -> dict[str, object]:
+        sub = await active_subscription(session, user_id)
+        return {
+            "plan": sub.plan if sub else "free",
+            "active": sub is not None,
+            "current_period_end": (
+                sub.current_period_end.isoformat() if sub else None
+            ),
+        }
+
     return router
 
 
