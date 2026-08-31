@@ -44,7 +44,7 @@ Both run on one Hetzner box (CX22/CAX11, ~€4–7/mo), many-apps-per-box per ST
 - [x] Billing router wired when `STRIPE_SECRET_KEY` set (`require_plan`-free: gate is a monthly `Release` count vs `free_monthly_limit`, or an active sub).
 - [x] Migration (tz-aware) generated + applied on sqlite; 5 tables.
 - [x] Web: one page — repo / base / head / tone → notes + copy + `used/limit` line + Upgrade button.
-- [ ] **Needs `ANTHROPIC_API_KEY`** to actually generate (503 without it) — no live generation test yet.
+- [x] **Live generation verified** (2026-08-31): `astral-sh/ruff 0.6.0...0.6.1` → 14 PRs → structured notes in ~10s, **$0.0105** on `claude-sonnet-5` (2598 in / 527 out). `usage` counter + `agent_runs` row both written. Needs `ANTHROPIC_API_KEY` in `.env` / `secrets.env`.
 - [ ] GitHub App / Action + REST token (the sticky distribution) — v2.
 - [ ] Deploy to a box + real domain (Porkbun + Cloudflare).
 - [ ] Model tiering: currently `WORKER` (sonnet-5) at `effort="medium"`, `pick_model` degrades to Haiku past `agent_token_ceiling`. Add `cache_control` on the system prefix. Consider Haiku for small PR sets.
