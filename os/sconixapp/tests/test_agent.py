@@ -88,6 +88,10 @@ class _Messages:
         self.calls.append(kwargs)
         return _Runner(self._msgs)
 
+    async def create(self, **kwargs):
+        self.calls.append(kwargs)
+        return self._msgs[0]
+
 
 class _Beta:
     def __init__(self, msgs: list[_Msg]) -> None:
@@ -97,6 +101,7 @@ class _Beta:
 class _FakeClient:
     def __init__(self, msgs: list[_Msg]) -> None:
         self.beta = _Beta(msgs)
+        self.messages = self.beta.messages  # no-tools path uses client.messages.create
 
 
 @pytest.fixture()
@@ -138,6 +143,28 @@ async def test_run_agent_records_a_run(session) -> None:
     call = client.beta.messages.calls[0]
     assert call["thinking"] == {"type": "adaptive"}
     assert call["output_config"] == {"effort": "high"}
+
+
+async def test_run_agent_with_tools_uses_the_runner(session) -> None:
+    client = _FakeClient([_Msg("a", 10, 5), _Msg("b", 20, 7)])
+
+    def _noop() -> str:
+        """A tool."""
+        return "ok"
+
+    result = await run_agent(
+        client=client,
+        session=session,
+        user_id="u3",
+        area="x.y",
+        model=NAV,
+        system="s",
+        messages=[{"role": "user", "content": "go"}],
+        tools=[_noop],
+    )
+    assert result.run.turns == 2
+    assert result.run.input_tokens == 30
+    assert "tools" in client.beta.messages.calls[0]
 
 
 async def test_pick_model_soft_degrades_past_ceiling(session) -> None:

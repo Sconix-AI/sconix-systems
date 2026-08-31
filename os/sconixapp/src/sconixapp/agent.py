@@ -151,7 +151,6 @@ async def run_agent(
         "model": model,
         "max_tokens": max_tokens,
         "system": system,
-        "tools": list(tools),
         "messages": messages,
         "thinking": {"type": "adaptive"},
         "output_config": {"effort": effort},
@@ -159,22 +158,29 @@ async def run_agent(
     if extra:
         create_kwargs.update(extra)
 
+    def _account(message: Any) -> None:
+        run.turns += 1
+        usage = getattr(message, "usage", None)
+        if usage is not None:
+            run.input_tokens += getattr(usage, "input_tokens", 0) or 0
+            run.output_tokens += getattr(usage, "output_tokens", 0) or 0
+            run.cache_read_tokens += getattr(usage, "cache_read_input_tokens", 0) or 0
+        history.append({"role": "assistant", "content": message.content})
+        for block in message.content:
+            if getattr(block, "type", None) == "text":
+                text_parts.append(block.text)
+
     try:
-        runner = client.beta.messages.tool_runner(**create_kwargs)
-        async for message in runner:
-            run.turns += 1
-            usage = getattr(message, "usage", None)
-            if usage is not None:
-                run.input_tokens += getattr(usage, "input_tokens", 0) or 0
-                run.output_tokens += getattr(usage, "output_tokens", 0) or 0
-                run.cache_read_tokens += getattr(usage, "cache_read_input_tokens", 0) or 0
-            history.append({"role": "assistant", "content": message.content})
-            for block in message.content:
-                if getattr(block, "type", None) == "text":
-                    text_parts.append(block.text)
-            if run.turns >= max_turns:
-                log.warning("agent.max_turns", area=area, turns=run.turns)
-                break
+        if tools:
+            runner = client.beta.messages.tool_runner(tools=list(tools), **create_kwargs)
+            async for message in runner:
+                _account(message)
+                if run.turns >= max_turns:
+                    log.warning("agent.max_turns", area=area, turns=run.turns)
+                    break
+        else:
+            # no tools -> a single completion, still accounted as one turn
+            _account(await client.messages.create(**create_kwargs))
         run.status = "ok"
     except Exception as exc:  # noqa: BLE001 - record the failure, then re-raise
         run.status = "error"
