@@ -57,6 +57,13 @@ class Settings(BaseSettings):
     resend_api_key: str | None = None
     stripe_secret_key: str | None = None
     stripe_webhook_secret: str | None = None
+    stripe_price_id: str | None = None
+
+    # --- agent (sconixapp.agent) --------------------------------------
+    anthropic_api_key: str | None = None
+    # per-user input+output tokens/month before run_agent soft-degrades to the
+    # cheap model; 0 disables the ceiling.
+    agent_token_ceiling: int = 0
 
     # --- CORS: origins allowed to call the API (web + mobile dev) --------
     cors_origins: list[str] = ["http://localhost:3000"]

@@ -22,9 +22,11 @@ dependencies = [
 jobs = ["arq>=0.26"]
 email = ["resend>=2.4"]
 billing = ["stripe>=11.1"]
+agent = ["anthropic>=0.69"]
 
 [dependency-groups]
-dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6"]
+# stripe + anthropic here (not just the extras) so billing/agent stay testable
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6", "aiosqlite>=0.20", "stripe>=11.1", "anthropic>=0.69"]
 
 [tool.ruff]
 line-length = 100
