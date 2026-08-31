@@ -14,3 +14,4 @@ The money view. One block per app (`sx ledger "..."` appends a dated note).
 - **2026-08-30 23:33** — deploy trim -> trim.204-168-172-115.sslip.io (04a901d)
 - **2026-08-30 23:34** — deploy trim -> trim.204-168-172-115.sslip.io (9e5b5fa)
 - **2026-08-30 23:39** — deploy trim -> trim.204-168-172-115.sslip.io (2cadef9)
+- **2026-08-31** — **first real deploy validated.** `sx provision` + `sx deploy trim` to a Hetzner cx23 (€6.49/mo, hel1): live HTTPS via Caddy auto-TLS on `trim.<ip>.sslip.io`, full create→redirect→click-count→stats path green. Surfaced + fixed 5 factory bugs (build context, sconixapp path-pin, web/public, Caddy /api strip, tz-aware timestamp) → template-web v0.1.1. Box + key + IP destroyed after; spend ≈ €0.05.

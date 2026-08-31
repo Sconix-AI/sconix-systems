@@ -19,8 +19,11 @@ See `STACK.md` for the locked stack. This is build order.
 - [x] `trim` built: FastAPI create/list/redirect + click count, Next 16 UI, prod compose + Caddy
 - [x] `trim` API verified end-to-end locally (sqlite): create → 307 redirect → click count → stats
 - [x] `sx provision user@host` + `sx deploy <app>` written (rsync → build → migrate → health-check; reads `deploy.env`)
-- [ ] **user provides: a VPS (Hetzner/other) + SSH key + a domain** → then `sx provision` + `sx deploy trim`
-- [ ] Docker available in WSL (only needed to *build/test images locally*; deploy builds on the box)
+- [x] **`sx provision` + `sx deploy trim` validated end-to-end** on a real Hetzner cx23 (2026-08-31):
+      live HTTPS at `trim.<ip>.sslip.io` (Caddy auto-TLS), create → 307 → click-count → stats all green,
+      box then destroyed. Fixed 5 factory bugs → `template-web` v0.1.1 + `sx` (see log/ledger).
+- [~] Docker available in WSL — not installed; not needed (deploy builds on the box). Local `task dev`
+      with Postgres still blocked; SQLite path covers local dev.
 - [ ] stress test: `hey`/`wrk` against `https://<domain>/<code>`, watch `/api/stats` + `docker stats`
 - [ ] push `sconix-systems` + `sconix-template-web` to GitHub (blocked: harness classifier — user runs `gh repo create`)
 
