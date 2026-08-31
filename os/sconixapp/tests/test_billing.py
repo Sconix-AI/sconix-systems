@@ -69,12 +69,19 @@ def test_require_plan_returns_dependency_callable() -> None:
     assert callable(dep)
 
 
-def test_router_builds_and_exposes_routes() -> None:
+def test_router_builds_and_openapi_schema_generates() -> None:
     router = build_billing_router(
         get_user_id=lambda: "user-1", settings=_Settings(), default_price_id="price_x"
     )
     paths = {r.path for r in router.routes}
     assert {"/api/billing/checkout", "/api/billing/portal", "/api/billing/webhook"} <= paths
+
+    # regression: the per-router `UserId = Annotated[...]` alias is function-local;
+    # under PEP 563 it broke `app.openapi()` schema generation. Must not.
+    app = FastAPI()
+    app.include_router(router)
+    schema = app.openapi()
+    assert "/api/billing/checkout" in schema["paths"]
 
     # webhook with a bogus signature must 400 (not 500) — signature check runs
     # before the session is touched, so a stub get_session is enough

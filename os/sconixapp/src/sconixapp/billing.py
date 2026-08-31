@@ -23,7 +23,11 @@ reads them, so the request hot path never calls Stripe.
 on the base :class:`sconixapp.Settings`).
 """
 
-from __future__ import annotations
+# NOTE: no `from __future__ import annotations` here. FastAPI resolves route
+# annotations via get_type_hints against the module globals; the per-router
+# `UserId = Annotated[str, Depends(get_user_id)]` alias is function-local, so
+# under PEP 563 it becomes an unresolvable ForwardRef and OpenAPI generation
+# blows up. Keeping annotations eager avoids that.
 
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
