@@ -176,7 +176,9 @@ import /srv/edge/sites/*.caddy
 CADDY
 [ "$(ls -A /srv/edge/sites 2>/dev/null)" ] || cat > /srv/edge/sites/_placeholder.caddy <<'CADDY'
 # apps add <app>.caddy here via `sx deploy`
-:9999 { respond "edge up" }
+:9999 {
+	respond "edge up"
+}
 CADDY
 cat > /srv/edge/compose.yml <<'YML'
 name: sconix-edge
