@@ -74,6 +74,24 @@ Both run on one Hetzner box (CX22/CAX11, ~€4–7/mo), many-apps-per-box per ST
 - Ships free + waitlist; billing on after App #1.
 - Skill graph = `skills` + `evidence` tables; render as a list first, graph viz later.
 
+## Design system — `@app/ui` (template-web **v0.3.0**, 2026-08-31)
+
+Direction: **minimal / neutral** — grayscale, near-black accent used sparingly, thin
+borders, `system-ui`, 8px radius, flat, content-forward.
+
+- New workspace package `packages/ui` (`@app/ui`). Token layer: Tailwind v4
+  `@theme inline` over `:root` / `:root.dark` CSS vars
+  (`--bg --surface --fg --muted --muted-fg --border --ring --primary --primary-fg --danger --radius`),
+  light + system-dark + `.dark` class.
+- Components: `Button` (primary/secondary/outline/ghost/danger/link × sm/md/lg/icon),
+  `Input`, `Textarea`, `Label`, `Field`, `Card`+parts, `Badge`, `Skeleton`, `Spinner`, `cn()`.
+  Deps: `class-variance-authority`, `clsx`, `tailwind-merge`.
+- Wired into `web`: `transpilePackages`, `@import "@app/ui/styles.css"`, `@source "../../../packages/ui/src"`.
+- **Retrofitted into Relnotes and deployed** — page + terms + privacy.
+- **Next pass:** Radix-based `Dialog / DropdownMenu / Select / Tabs / Toast`; an **auth UI kit**
+  (`LoginForm / SignupForm / MagicLinkForm / AuthGuard`) + finally wire `fastapi-users` into the template
+  (Relnotes still uses anonymous `X-Client-Id`).
+
 ## Vendor checklist (wire keys via sops as created)
 
 | vendor | for | when |
