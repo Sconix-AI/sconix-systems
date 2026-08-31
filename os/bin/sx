@@ -137,8 +137,9 @@ EOF
     echo "Sconix Systems — doctor"
     for t in node pnpm uv copier ruff task gh git sops age docker caddy; do
       printf "  %-9s " "$t"
-      if command -v "$t" >/dev/null; then
-        "$t" --version 2>/dev/null | head -1
+      if command -v "$t" >/dev/null 2>&1; then
+        v="$("$t" --version 2>/dev/null | head -1 || true)"
+        echo "${v:-present}"
       else
         echo "MISSING"
       fi
