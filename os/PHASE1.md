@@ -44,7 +44,7 @@ Both run on one Hetzner box (CX22/CAX11, ~€4–7/mo), many-apps-per-box per ST
 
 **MVP — v0 built (commit 2956a48 in `apps/relnotes`), runs locally:**
 - [x] `sx new relnotes` (also fixed template: stale `v0.1.4` tag was shadowing the deployable-build fixes → retagged **v0.2.2**; generic Caddyfile; gitignore `next-env.d.ts` + Next agent files; ruff ignores I001/UP in autogen migrations).
-- [x] Auth: **anonymous `X-Client-Id`** (UUID in localStorage), not magic link — free tier counted per client id, Pro subscription keyed to it. Magic-link/accounts = later.
+- [x] Auth: **real accounts** — `sconixapp.auth` (email+password, httpOnly cookie, signup/login/logout/delete/me). Every route gated on sign-in; releases keyed to `user_id` (FK). Frontend: AuthProvider, SiteHeader w/ user menu, SiteFooter, `/login` `/signup` `/settings` pages. New init migration (users + user_id). Magic-link via Resend still later.
 - [x] `POST /api/releases` — `github.py` (compare `base..head` → merged-PR set → digest) → `notes.py` (`run_agent(tools=[])` → JSON → markdown). `GET /api/usage`, `GET/list /api/releases`.
 - [x] Billing router wired when `STRIPE_SECRET_KEY` set (`require_plan`-free: gate is a monthly `Release` count vs `free_monthly_limit`, or an active sub).
 - [x] Migration (tz-aware) generated + applied on sqlite; 5 tables.

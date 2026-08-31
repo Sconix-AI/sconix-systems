@@ -18,3 +18,10 @@ The money view. One block per app (`sx ledger "..."` appends a dated note).
 - **2026-08-31 00:58** — deploy relnotes -> relnotes.204-168-172-115.sslip.io (7438d74)
 - **2026-08-31 01:00** — deploy relnotes -> relnotes.204-168-172-115.sslip.io (416e633)
 - **2026-08-31** — **Relnotes LIVE.** `sx deploy relnotes` to a Hetzner **cx23** (€6.49/mo, hel1) at https://relnotes.204-168-172-115.sslip.io — Caddy auto-TLS, Postgres+Redis. Verified in prod: generation (ruff 0.6.0→0.6.1, 14 PRs, $0.01), per-IP rate limit, and the **full Stripe billing loop** (checkout → registered webhook `we_1UAOG4…` → `billing_subscriptions` row → Pro gate; free client 402 at 5/mo). Fixed 1 more factory bug: api Dockerfile dropped `sconixapp[extras]` → no stripe on the box → template **v0.2.3**. Box still running (first paying-capable app). Stripe = TEST mode.
+- **2026-08-31 01:17** — deploy relnotes -> relnotes.204-168-172-115.sslip.io (f982d2e)
+- **2026-08-31 01:24** — deploy relnotes -> relnotes.204-168-172-115.sslip.io (3a0a848)
+- **2026-08-31 01:28** — deploy relnotes -> relnotes.204-168-172-115.sslip.io (77b543d)
+- **2026-08-31 01:34** — deploy relnotes -> relnotes.204-168-172-115.sslip.io (4eb7c3b)
+- **2026-08-31 01:38** — deploy relnotes -> relnotes.204-168-172-115.sslip.io (1950a41)
+- **2026-08-31 01:51** — deploy relnotes -> relnotes.204-168-172-115.sslip.io (a18020b)
+- **2026-08-31** — Relnotes became a **real app**: `sconixapp.auth` (email+password, cookie) + gated routes + user-owned releases; frontend gained AuthProvider, header w/ user menu, footer, `/login` `/signup` `/settings`. `@app/ui` up to v0.5.2 (Radix Dialog/DropdownMenu/Select/Tabs/Toaster, auth UI kit, Button asChild). Box DB reset + redeployed. Stripe still TEST.
