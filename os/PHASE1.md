@@ -93,11 +93,25 @@ borders, `system-ui`, 8px radius, flat, content-forward.
 - **Retrofitted into Relnotes and deployed** — page + terms + privacy.
 - ✅ **v0.4.0** — interactive components: `Dialog`, `DropdownMenu`, `Select`, `Tabs`, `Toaster` (sonner),
   inline icon set, `tw-animate-css`. `/ui` showcase route (living reference, every app gets it).
-- ✅ **v0.5.0** — auth **UI kit** (presentational, take `onSubmit`): `AuthCard`, `LoginForm`, `SignupForm`,
-  `MagicLinkForm`, `AuthGuard`. All live in Relnotes at `/ui`.
-- **Still pending:** `sconixapp.auth` — the **backend** wiring (fastapi-users: user model, JWT + cookie
-  backends, register/login/verify/reset routers, magic-link via Resend). Needs the Resend key + a call on
-  verification-required vs not. Relnotes keeps anonymous `X-Client-Id`; Skillforge needs real accounts.
+- ✅ **v0.5.x** — auth **UI kit** (`LoginForm`, `SignupForm`, `MagicLinkForm`, `AuthGuard`, `AuthCard`);
+  `Button asChild` (Radix Slot). Fixed `@source` path bug + lifted dark contrast.
+- ✅ **`sconixapp.auth` built** — lean email+password + httpOnly cookie (signup/login/logout/me/delete),
+  `make_current_user_id(settings)` dep, `User` table. Not fastapi-users. Magic-link/Resend still later.
+
+## Factory consolidated — template `template-web` **v0.6.0** (2026-08-31)
+
+`sx new <app>` now scaffolds a **working signed-in app**, not a to-do list:
+
+- **api**: `sconixapp[billing]` dep; `main.py` wires `build_auth_router` + `build_billing_router`
+  (behind the Stripe-key check) + Sentry; `models.py` imports `User` + billing tables; the demo
+  `Item` CRUD is per-user (`user_id` FK) behind auth.
+- **web**: `AuthProvider` + `useAuth`/`useRequireAuth`; `SiteHeader` (user menu) / `SiteFooter` /
+  `Shell`; `/login` `/signup` `/settings` `/terms` `/privacy` pages; `lib/client.ts`
+  (`credentials:"include"`, auth+billing helpers, `API=""` default so prod uses same-origin);
+  `lib/config.ts.jinja` renders `{{ app_name }}`.
+- `test_template.sh` now also runs `pnpm install` + `next build` (`SKIP_WEB=1` to skip).
+- Regression green: sconixapp 24 tests, generated api (ruff+pytest), **generated web build**.
+- **Skillforge** is now: `sx new skillforge` → build the curriculum agent + skill graph. Nothing else.
 
 ## Vendor checklist (wire keys via sops as created)
 
