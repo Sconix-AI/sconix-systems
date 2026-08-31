@@ -88,9 +88,13 @@ borders, `system-ui`, 8px radius, flat, content-forward.
   Deps: `class-variance-authority`, `clsx`, `tailwind-merge`.
 - Wired into `web`: `transpilePackages`, `@import "@app/ui/styles.css"`, `@source "../../../packages/ui/src"`.
 - **Retrofitted into Relnotes and deployed** — page + terms + privacy.
-- **Next pass:** Radix-based `Dialog / DropdownMenu / Select / Tabs / Toast`; an **auth UI kit**
-  (`LoginForm / SignupForm / MagicLinkForm / AuthGuard`) + finally wire `fastapi-users` into the template
-  (Relnotes still uses anonymous `X-Client-Id`).
+- ✅ **v0.4.0** — interactive components: `Dialog`, `DropdownMenu`, `Select`, `Tabs`, `Toaster` (sonner),
+  inline icon set, `tw-animate-css`. `/ui` showcase route (living reference, every app gets it).
+- ✅ **v0.5.0** — auth **UI kit** (presentational, take `onSubmit`): `AuthCard`, `LoginForm`, `SignupForm`,
+  `MagicLinkForm`, `AuthGuard`. All live in Relnotes at `/ui`.
+- **Still pending:** `sconixapp.auth` — the **backend** wiring (fastapi-users: user model, JWT + cookie
+  backends, register/login/verify/reset routers, magic-link via Resend). Needs the Resend key + a call on
+  verification-required vs not. Relnotes keeps anonymous `X-Client-Id`; Skillforge needs real accounts.
 
 ## Vendor checklist (wire keys via sops as created)
 
