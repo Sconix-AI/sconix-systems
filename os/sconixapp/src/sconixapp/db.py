@@ -33,15 +33,19 @@ _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 
 
 def init_engine(database_url: str, *, echo: bool = False) -> AsyncEngine:
-    """Create the process-wide engine + sessionmaker. Call once at startup."""
+    """Create the process-wide engine + sessionmaker. Call once at startup.
+
+    Postgres (prod) gets a real pool. SQLite (``sqlite+aiosqlite://``, for
+    zero-Docker local dev) skips pool args, which its dialect rejects.
+    """
     global _engine, _sessionmaker
-    _engine = create_async_engine(
-        str(database_url),
-        echo=echo,
-        pool_pre_ping=True,
-        pool_size=5,
-        max_overflow=10,
-    )
+    url = str(database_url)
+    kwargs: dict = {"echo": echo}
+    if url.startswith("sqlite"):
+        kwargs["connect_args"] = {"check_same_thread": False}
+    else:
+        kwargs.update(pool_pre_ping=True, pool_size=5, max_overflow=10)
+    _engine = create_async_engine(url, **kwargs)
     _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False, class_=AsyncSession)
     return _engine
 
