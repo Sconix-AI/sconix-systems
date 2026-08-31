@@ -25,3 +25,4 @@ The money view. One block per app (`sx ledger "..."` appends a dated note).
 - **2026-08-31 01:38** — deploy relnotes -> relnotes.204-168-172-115.sslip.io (1950a41)
 - **2026-08-31 01:51** — deploy relnotes -> relnotes.204-168-172-115.sslip.io (a18020b)
 - **2026-08-31** — Relnotes became a **real app**: `sconixapp.auth` (email+password, cookie) + gated routes + user-owned releases; frontend gained AuthProvider, header w/ user menu, footer, `/login` `/signup` `/settings`. `@app/ui` up to v0.5.2 (Radix Dialog/DropdownMenu/Select/Tabs/Toaster, auth UI kit, Button asChild). Box DB reset + redeployed. Stripe still TEST.
+- **2026-08-31 01:55** — deploy relnotes -> relnotes.204-168-172-115.sslip.io (865f28b)
