@@ -6,3 +6,6 @@ os/sconixapp/uv.lock
 apps/
 **/__pycache__/
 **/*.pyc
+
+# SOPS age private key — NEVER commit. Back up out-of-band; copy to the box for decrypt.
+os/.age/

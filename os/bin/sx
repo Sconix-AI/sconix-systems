@@ -20,7 +20,8 @@ sx — Sconix Systems
   sx ledger <text...>     add a dated note to ~/systems/ledger.md
   sx sync <app>           re-apply template-web (pull in engine/template updates)
   sx gen  <app>           regenerate packages/api-client from the FastAPI OpenAPI spec
-  sx provision user@host  install docker + firewall + /srv on a fresh VPS (run once)
+  sx secrets <app>        edit apps/<app>/secrets.env (SOPS+age; committed encrypted)
+  sx provision user@host  install docker + firewall + /srv + sops/age key on a fresh VPS (run once)
   sx deploy <app> [user@host]
                           rsync -> build -> up -> migrate -> health-check
                           (reads apps/<app>/deploy.env: DEPLOY_HOST, APP_DOMAIN)
@@ -118,6 +119,17 @@ case "$cmd" in
     ( cd "$dir" && pnpm run gen:api )
     ;;
 
+  secrets)
+    proj="${1:?usage: sx secrets <app>}"
+    dir="$APPS/$proj"
+    [ -d "$dir" ] || { echo "no such app: $proj"; exit 1; }
+    [ -f "$OS/.age/keys.txt" ] || { echo "no age key at $OS/.age/keys.txt — run: age-keygen -o $OS/.age/keys.txt"; exit 1; }
+    f="$dir/secrets.env"
+    [ -f "$f" ] || { printf '# apps/%s secrets — SOPS+age encrypted, safe to commit.\nJWT_SECRET=%s\n' \
+        "$proj" "$(python3 -c 'import secrets;print(secrets.token_urlsafe(48))')" > "$f"; }
+    SOPS_AGE_KEY_FILE="$OS/.age/keys.txt" sops --config "$SYSTEMS/.sops.yaml" "$f"
+    ;;
+
   provision)
     target="${1:?usage: sx provision user@host}"
     echo ":: provisioning $target (docker + firewall + /srv)"
@@ -138,6 +150,11 @@ fi
 docker --version
 echo "provisioned OK"
 REMOTE
+    if [ -f "$OS/.age/keys.txt" ]; then
+      echo ":: install sops + push age key to $target"
+      ssh "$target" 'command -v sops >/dev/null || { sudo curl -fsSL -o /usr/local/bin/sops https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.amd64 && sudo chmod +x /usr/local/bin/sops; }'
+      ssh "$target" 'umask 077; mkdir -p ~/.config/sops; cat > ~/.config/sops/age-key.txt' < "$OS/.age/keys.txt"
+    fi
     echo ":: done. Re-login on the box once so the docker group applies."
     ;;
 
@@ -160,11 +177,21 @@ REMOTE
       --exclude '*.egg-info' --exclude .ruff_cache --exclude .pytest_cache \
       "$APPLIB/" "$dir/_sconixapp/"
 
+    # If secrets.env (SOPS-encrypted) exists, it is the source of truth — the plaintext
+    # local .env is dev-only and must not ship; the box derives .env by decrypting.
+    secrets_rsync=""
+    [ -f "$dir/secrets.env" ] && secrets_rsync="--exclude .env"
+
     echo ":: sync $proj -> $host:/srv/$proj"
     rsync -az --delete \
       --exclude .git --exclude node_modules --exclude .venv --exclude .next \
-      --exclude __pycache__ --exclude '*.db' --exclude .turbo \
+      --exclude __pycache__ --exclude '*.db' --exclude .turbo $secrets_rsync \
       "$dir/" "$host:/srv/$proj/"
+
+    if [ -f "$dir/secrets.env" ]; then
+      echo ":: decrypt secrets.env -> .env on $host"
+      ssh "$host" "cd /srv/$proj && SOPS_AGE_KEY_FILE=\$HOME/.config/sops/age-key.txt sops -d secrets.env > .env"
+    fi
 
     echo ":: build + up (profile prod) on $host"
     ssh "$host" "cd /srv/$proj && grep -q '^APP_DOMAIN=' .env || echo 'APP_DOMAIN=$APP_DOMAIN' >> .env; docker compose --profile prod build && docker compose --profile prod up -d"

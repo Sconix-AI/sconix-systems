@@ -1,0 +1,5 @@
+# Every app keeps real secrets in apps/<app>/secrets.env (SOPS-encrypted, committed).
+# Decrypt: SOPS_AGE_KEY_FILE=~/systems/os/.age/keys.txt sops -d apps/<app>/secrets.env
+creation_rules:
+  - path_regex: (secrets\.env|\.sops\.(env|ya?ml|json))$
+    age: "age17y043jwdpemegu24rptugncf909ztztx3xjlkdc2x9c23q7483wscj7hwc"

@@ -13,7 +13,7 @@ Both run on one Hetzner box (CX22/CAX11, ~€4–7/mo), many-apps-per-box per ST
 
 ## Gate 0 — close the factory gaps (do first)
 
-- [ ] `sops` + `age` installed; `~/systems/os` gets an `age` keypair; `.env` secrets move to `secrets.env.sops` per app, decrypted on the box by `sx deploy`.
+- [x] `sops` (3.13.3, `~/.local/bin`) + `age` (1.0.0) installed; age keypair at `~/systems/os/.age/keys.txt` (gitignored); `~/systems/.sops.yaml` rule for `secrets.env`. `sx secrets <app>` edits it; `sx provision` installs sops on the box + pushes the key to `~/.config/sops/age-key.txt`; `sx deploy` decrypts `secrets.env` → `.env` on the box (plaintext `.env` no longer ships when `secrets.env` exists).
 - [ ] `sx deploy` reloads Caddy when only the Caddyfile changed (`docker compose exec caddy caddy reload` or `--force-recreate caddy`). First trim deploy needed a manual restart.
 - [ ] Push `sconix-systems` + `sconix-template-web` to private GitHub (user runs `gh repo create`, then `git push`). CI in `.github/workflows/ci.yml` needs the `_os` clone URL fixed too.
 
