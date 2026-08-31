@@ -91,7 +91,12 @@ class Subscription(SQLModel, table=True):
 
     @property
     def is_live(self) -> bool:
-        return self.status in _LIVE_STATUSES and self.current_period_end > _utcnow()
+        cpe = self.current_period_end
+        # SQLite hands back naive datetimes even for timezone=True columns;
+        # Postgres hands back aware. Normalise before comparing.
+        if cpe.tzinfo is None:
+            cpe = cpe.replace(tzinfo=UTC)
+        return self.status in _LIVE_STATUSES and cpe > _utcnow()
 
 
 # --- service --------------------------------------------------------------

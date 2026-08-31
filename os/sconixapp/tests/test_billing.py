@@ -70,6 +70,16 @@ def test_period_end_reads_item_then_top_level() -> None:
     assert _period_end({}).tzinfo is not None
 
 
+def test_is_live_tolerates_naive_datetime() -> None:
+    from datetime import datetime, timedelta
+
+    naive_future = datetime.utcnow() + timedelta(days=5)  # noqa: DTZ003 - simulate sqlite
+    assert Subscription(
+        user_id="u", stripe_subscription_id="s9", status="active",
+        plan="pro", current_period_end=naive_future,
+    ).is_live
+
+
 def test_plan_of_prefers_lookup_key_then_metadata_then_default() -> None:
     assert plan_of({"items": {"data": [{"price": {"lookup_key": "team"}}]}}) == "team"
     assert plan_of({"items": {"data": [{"price": {"metadata": {"plan": "starter"}}}]}}) == "starter"
