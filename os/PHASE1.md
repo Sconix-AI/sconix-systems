@@ -37,17 +37,21 @@ Both run on one Hetzner box (CX22/CAX11, ~€4–7/mo), many-apps-per-box per ST
 
 **Job:** repo + two git refs → structured release notes (Features / Fixes / Breaking / Chore), from the merged PRs in that range.
 
-**MVP**
-- `sx new relnotes`
-- Auth: magic link (fastapi-users). Billing: one `pro` plan gates >N generations/mo.
-- One agent loop: GitHub tool (list merged PRs between refs, fetch titles/bodies/labels) → Tool Runner → markdown + JSON out.
-- UI: paste repo URL + pick two tags → rendered notes + copy button + "regenerate with tone X".
-- Deliver: web form now; GitHub Action + REST endpoint next (that's the sticky distribution).
-- Deploy to the box, real domain (Porkbun + Cloudflare).
+**MVP — v0 built (commit 2956a48 in `apps/relnotes`), runs locally:**
+- [x] `sx new relnotes` (also fixed template: stale `v0.1.4` tag was shadowing the deployable-build fixes → retagged **v0.2.2**; generic Caddyfile; gitignore `next-env.d.ts` + Next agent files; ruff ignores I001/UP in autogen migrations).
+- [x] Auth: **anonymous `X-Client-Id`** (UUID in localStorage), not magic link — free tier counted per client id, Pro subscription keyed to it. Magic-link/accounts = later.
+- [x] `POST /api/releases` — `github.py` (compare `base..head` → merged-PR set → digest) → `notes.py` (`run_agent(tools=[])` → JSON → markdown). `GET /api/usage`, `GET/list /api/releases`.
+- [x] Billing router wired when `STRIPE_SECRET_KEY` set (`require_plan`-free: gate is a monthly `Release` count vs `free_monthly_limit`, or an active sub).
+- [x] Migration (tz-aware) generated + applied on sqlite; 5 tables.
+- [x] Web: one page — repo / base / head / tone → notes + copy + `used/limit` line + Upgrade button.
+- [ ] **Needs `ANTHROPIC_API_KEY`** to actually generate (503 without it) — no live generation test yet.
+- [ ] GitHub App / Action + REST token (the sticky distribution) — v2.
+- [ ] Deploy to a box + real domain (Porkbun + Cloudflare).
+- [ ] Model tiering: currently `WORKER` (sonnet-5) at `effort="medium"`, `pick_model` degrades to Haiku past `agent_token_ceiling`. Add `cache_control` on the system prefix. Consider Haiku for small PR sets.
 
-**Cost:** runs on release, not per keystroke. Sonnet default, Haiku for small diffs. Cache repo/style prefix. Expect << $0.10/run.
+**Cost:** one completion per release, `effort=medium`, `max_tokens=4000`. Expect << $0.05/run on Sonnet.
 
-**Pricing (draft):** free = 5 repos-notes/mo, pro = $12/mo unlimited + API/Action. Revisit after first users.
+**Pricing (draft):** free = 5 releases/mo, pro = $12/mo unlimited + API/Action. Revisit after first users.
 
 ## App #2 — Skillforge (parked)
 
