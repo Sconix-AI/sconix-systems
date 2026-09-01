@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -39,8 +40,13 @@ class Inspection:
         }
 
 
-def _schema_path() -> Path:
-    return Path(__file__).resolve().parents[4] / "schemas" / "sconix.project.v1.schema.json"
+def _schema_text() -> str:
+    packaged = files("sconixcore").joinpath("schemas/sconix.project.v1.schema.json")
+    try:
+        return packaged.read_text()
+    except FileNotFoundError:
+        path = Path(__file__).resolve().parents[4] / "schemas" / "sconix.project.v1.schema.json"
+        return path.read_text()
 
 
 def _find_root(start: Path) -> tuple[Path, Path]:
@@ -99,7 +105,7 @@ def _legacy_manifest(source: Path, raw: dict[str, Any]) -> tuple[dict[str, Any],
 
 
 def _validate(manifest: dict[str, Any]) -> list[str]:
-    schema = json.loads(_schema_path().read_text())
+    schema = json.loads(_schema_text())
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
     return [
         f"{'.'.join(str(part) for part in error.absolute_path) or '<root>'}: {error.message}"

@@ -26,3 +26,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sconixcore"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"../../schemas/sconix.project.v1.schema.json" = "sconixcore/schemas/sconix.project.v1.schema.json"
