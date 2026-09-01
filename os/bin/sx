@@ -7,6 +7,7 @@ APPS="$HOME/systems/apps"
 SYSTEMS="$HOME/systems"
 TEMPLATE="$OS/template-web"
 APPLIB="$OS/sconixapp"
+CORE_DEPLOY="$OS/sconixcore/.venv/bin/sconix-deploy"
 
 usage() {
   cat <<'EOF'
@@ -22,9 +23,16 @@ sx — Sconix Systems
   sx gen  <app>           regenerate packages/api-client from the FastAPI OpenAPI spec
   sx secrets <app>        edit apps/<app>/secrets.env (SOPS+age; committed encrypted)
   sx provision user@host  install docker + firewall + /srv + sops/age key on a fresh VPS (run once)
-  sx deploy <app> [user@host]
-                          rsync -> build -> up -> migrate -> health-check
+  sx deploy <app> --plan [user@host]
+                          create an immutable deployment plan
+  sx deploy <app> --approve <plan-id> [user@host]
+                          consume approval -> sync -> build -> migrate -> verify
                           (reads apps/<app>/deploy.env: DEPLOY_HOST, APP_DOMAIN)
+  sx approve <plan-id> [reason]
+                          record one attributable approval for a deployment plan
+  sx rollback <app> <release> --plan [user@host]
+  sx rollback <app> <release> --approve <plan-id> [user@host]
+                          restore a release's code/containers; never reverses DB migrations
   sx restart <app> [user@host]
                           restart a deployed app's containers in place (no rebuild)
   sx doctor               check the toolchain
@@ -206,15 +214,39 @@ REMOTE
     ;;
 
   deploy)
-    proj="${1:?usage: sx deploy <app> [user@host]}"
+    proj="${1:?usage: sx deploy <app> --plan|--approve <plan-id> [user@host]}"
+    shift
     dir="$APPS/$proj"
     [ -d "$dir" ] || { echo "no such app: $proj"; exit 1; }
     # config: apps/<app>/deploy.env  ->  DEPLOY_HOST=user@ip   APP_DOMAIN=trim.sh
     [ -f "$dir/deploy.env" ] && . "$dir/deploy.env"
-    host="${2:-${DEPLOY_HOST:-}}"
+    mode="${1:-}"
+    shift || true
+    plan_id=""
+    if [ "$mode" = "--approve" ]; then
+      plan_id="${1:?usage: sx deploy $proj --approve <plan-id> [user@host]}"
+      shift
+    elif [ "$mode" != "--plan" ]; then
+      echo "deployment requires a plan: sx deploy $proj --plan"
+      exit 1
+    fi
+    host="${1:-${DEPLOY_HOST:-}}"
     [ -n "$host" ] || { echo "no host — pass one or set DEPLOY_HOST in $dir/deploy.env"; exit 1; }
     [ -n "${APP_DOMAIN:-}" ] || { echo "set APP_DOMAIN in $dir/deploy.env"; exit 1; }
     ( cd "$dir" && git diff --quiet && git diff --cached --quiet ) || { echo "commit changes in $proj first"; exit 1; }
+
+    actor="${SCONIX_PRINCIPAL:-${USER:-operator}}"
+    if [ "$mode" = "--plan" ]; then
+      "$CORE_DEPLOY" plan "$proj" --root "$dir" --host "$host" --domain "$APP_DOMAIN" --by "$actor"
+      echo "approve with: sx approve <plan-id> \"reason\""
+      exit 0
+    fi
+
+    "$CORE_DEPLOY" verify "$plan_id" --root "$dir" --host "$host" --domain "$APP_DOMAIN" >/dev/null
+    deploy_failed() {
+      "$CORE_DEPLOY" complete "$plan_id" --status failed --evidence "deployment command failed" >/dev/null 2>&1 || true
+    }
+    trap deploy_failed ERR
     ( cd "$dir" && git push 2>/dev/null || true )
 
     # sconixapp is a path dep — vendor a clean copy in so the api image can build.
@@ -229,12 +261,17 @@ REMOTE
     secrets_rsync=""
     [ -f "$dir/secrets.env" ] && secrets_rsync="--exclude .env"
 
-    echo ":: sync $proj -> $host:/srv/$proj"
+    release_id="$(git -C "$dir" rev-parse --short=12 HEAD)-$plan_id"
+    release_root="/srv/releases/$proj"
+    remote_release="$release_root/$release_id"
+    echo ":: stage immutable release $release_id"
+    ssh "$host" "set -e; umask 077; mkdir -p '$release_root'; test ! -e '$remote_release'; rm -rf '$remote_release.tmp'; mkdir '$remote_release.tmp'"
     rsync -az --delete \
       --exclude .git --exclude node_modules --exclude .venv --exclude .next \
       --exclude __pycache__ --exclude '*.db' --exclude .turbo \
       --exclude docker-compose.override.yml $secrets_rsync \
-      "$dir/" "$host:/srv/$proj/"
+      "$dir/" "$host:$remote_release.tmp/"
+    ssh "$host" "set -e; mv '$remote_release.tmp' '$remote_release'; mkdir -p '/srv/$proj'; rsync -a --delete '$remote_release/' '/srv/$proj/'; printf '%s\n' '$release_id' > '/srv/$proj/.sconix-release'"
 
     if [ -f "$dir/secrets.env" ]; then
       echo ":: decrypt secrets.env -> .env on $host"
@@ -255,15 +292,69 @@ REMOTE
     echo ":: migrate"
     ssh "$host" "cd /srv/$proj && docker compose exec -T api alembic -c api/alembic.ini upgrade head"
 
-    echo ":: health"
-    sleep 3
-    if curl -fsS --max-time 10 "https://$APP_DOMAIN/healthz" >/dev/null; then
-      echo "   https://$APP_DOMAIN/healthz OK"
-    else
-      echo "   WARN: health check failed (DNS not propagated / cert issuing?) — check: ssh $host 'cd /srv/$proj && docker compose logs --tail=50'"
-    fi
+    echo ":: verify health + readiness"
+    verified=false
+    for attempt in 1 2 3 4 5 6; do
+      if curl -fsS --max-time 10 "https://$APP_DOMAIN/healthz" >/dev/null \
+        && curl -fsS --max-time 10 "https://$APP_DOMAIN/readyz" >/dev/null; then
+        verified=true
+        break
+      fi
+      [ "$attempt" -eq 6 ] || sleep 5
+    done
+    [ "$verified" = true ] || { echo "verification failed after 6 attempts"; false; }
+    "$CORE_DEPLOY" complete "$plan_id" --status verified \
+      --evidence "healthz and readyz passed" >/dev/null
+    trap - ERR
     printf -- '- **%s** — deploy %s -> %s (%s)\n' "$(date '+%Y-%m-%d %H:%M')" "$proj" "$APP_DOMAIN" "$(git -C "$dir" rev-parse --short HEAD)" >> "$SYSTEMS/ledger.md"
     echo ":: deployed. ledger updated."
+    ;;
+
+  approve)
+    plan_id="${1:?usage: sx approve <plan-id> [reason]}"
+    shift
+    reason="${*:-operator approved deployment}"
+    actor="${SCONIX_PRINCIPAL:-${USER:-operator}}"
+    "$CORE_DEPLOY" approve "$plan_id" --by "$actor" --reason "$reason"
+    ;;
+
+  rollback)
+    proj="${1:?usage: sx rollback <app> <release> --plan|--approve <plan-id> [user@host]}"
+    release="${2:?usage: sx rollback <app> <release> --plan|--approve <plan-id> [user@host]}"
+    shift 2
+    dir="$APPS/$proj"
+    [ -d "$dir" ] || { echo "no such app: $proj"; exit 1; }
+    [ -f "$dir/deploy.env" ] && . "$dir/deploy.env"
+    mode="${1:-}"; shift || true
+    plan_id=""
+    if [ "$mode" = "--approve" ]; then plan_id="${1:?plan id required}"; shift
+    elif [ "$mode" != "--plan" ]; then echo "rollback requires --plan or --approve"; exit 1
+    fi
+    host="${1:-${DEPLOY_HOST:-}}"
+    [ -n "$host" ] && [ -n "${APP_DOMAIN:-}" ] || { echo "host and APP_DOMAIN required"; exit 1; }
+    actor="${SCONIX_PRINCIPAL:-${USER:-operator}}"
+    if [ "$mode" = "--plan" ]; then
+      "$CORE_DEPLOY" plan "$proj" --root "$dir" --host "$host" --domain "$APP_DOMAIN" \
+        --by "$actor" --action rollback --release "$release"
+      exit 0
+    fi
+    "$CORE_DEPLOY" verify "$plan_id" --root "$dir" --host "$host" --domain "$APP_DOMAIN" \
+      --action rollback --release "$release" >/dev/null
+    rollback_failed() { "$CORE_DEPLOY" complete "$plan_id" --status failed --evidence "rollback failed" >/dev/null 2>&1 || true; }
+    trap rollback_failed ERR
+    echo ":: restore immutable release $release (database migrations are not reversed)"
+    ssh "$host" "set -e; test -d '/srv/releases/$proj/$release'; rsync -a --delete '/srv/releases/$proj/$release/' '/srv/$proj/'; printf '%s\n' '$release' > '/srv/$proj/.sconix-release'; cd '/srv/$proj'; if [ -f secrets.env ]; then SOPS_AGE_KEY_FILE=\$HOME/.config/sops/age-key.txt sops -d secrets.env > .env; fi; docker compose --profile prod build; docker compose --profile prod up -d"
+    verified=false
+    for attempt in 1 2 3 4 5 6; do
+      if curl -fsS --max-time 10 "https://$APP_DOMAIN/healthz" >/dev/null \
+        && curl -fsS --max-time 10 "https://$APP_DOMAIN/readyz" >/dev/null; then verified=true; break; fi
+      [ "$attempt" -eq 6 ] || sleep 5
+    done
+    [ "$verified" = true ] || { echo "rollback verification failed"; false; }
+    "$CORE_DEPLOY" complete "$plan_id" --status verified --evidence "rollback healthz and readyz passed" >/dev/null
+    trap - ERR
+    printf -- '- **%s** — rollback %s -> %s\n' "$(date '+%Y-%m-%d %H:%M')" "$proj" "$release" >> "$SYSTEMS/ledger.md"
+    echo ":: rollback verified"
     ;;
 
   restart)

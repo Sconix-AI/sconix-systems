@@ -7,6 +7,7 @@ dependencies = ["pyyaml>=6", "jsonschema>=4.23"]
 
 [project.scripts]
 sconix-inspect = "sconixcore.cli:main"
+sconix-deploy = "sconixcore.deploy:main"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
