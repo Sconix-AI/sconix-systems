@@ -1,0 +1,28 @@
+[project]
+name = "sconixcore"
+version = "0.1.0"
+description = "Agent-native project contracts and inspection for Sconix"
+requires-python = ">=3.12"
+dependencies = ["pyyaml>=6", "jsonschema>=4.23"]
+
+[project.scripts]
+sconix-inspect = "sconixcore.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sconixcore"]
