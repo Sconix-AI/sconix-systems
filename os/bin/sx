@@ -37,6 +37,12 @@ sx — Sconix Systems
   sx canary <app> --plan [user@host]
   sx canary <app> --approve <plan-id> [user@host]
                           isolated stack + route; verify before promotion
+  sx promote <app> <canary-plan-id> --plan [user@host]
+  sx promote <app> <canary-plan-id> --approve <plan-id> [user@host]
+                          switch production traffic to a verified canary
+  sx teardown <app> <canary-plan-id> --plan [user@host]
+  sx teardown <app> <canary-plan-id> --approve <plan-id> [user@host]
+                          remove an isolated canary after it is no longer active
   sx restart <app> [user@host]
                           restart a deployed app's containers in place (no rebuild)
   sx doctor               check the toolchain
@@ -409,9 +415,85 @@ REMOTE
     echo ":: verify canary through shared edge network"
     ssh "$host" "docker exec sconix-edge wget -qO- 'http://$slot-api:8000/healthz' >/dev/null && docker exec sconix-edge wget -qO- 'http://$slot-api:8000/readyz' >/dev/null"
     "$CORE_DEPLOY" complete "$plan_id" --status verified --evidence "isolated canary healthz and readyz passed at $canary_domain" >/dev/null
+    ssh "$host" "printf '%s\\n' '{\"planId\":\"$plan_id\",\"release\":\"$release_id\",\"slot\":\"$slot\",\"domain\":\"$canary_domain\"}' > '/srv/$proj/.sconix-canary-$plan_id.json'"
     trap - ERR
     printf -- '- **%s** — canary %s -> %s (%s)\n' "$(date '+%Y-%m-%d %H:%M')" "$proj" "$canary_domain" "$release_id" >> "$SYSTEMS/ledger.md"
     echo ":: canary verified at https://$canary_domain (slot $slot)"
+    ;;
+
+  promote)
+    proj="${1:?usage: sx promote <app> <canary-plan-id> --plan|--approve <plan-id> [user@host]}"
+    canary_plan_id="${2:?usage: sx promote <app> <canary-plan-id> --plan|--approve <plan-id> [user@host]}"
+    shift 2
+    dir="$APPS/$proj"
+    [ -d "$dir" ] || { echo "no such app: $proj"; exit 1; }
+    [ -f "$dir/deploy.env" ] && . "$dir/deploy.env"
+    mode="${1:-}"; shift || true
+    plan_id=""
+    if [ "$mode" = "--approve" ]; then plan_id="${1:?plan id required}"; shift
+    elif [ "$mode" != "--plan" ]; then echo "promotion requires --plan or --approve"; exit 1
+    fi
+    host="${1:-${DEPLOY_HOST:-}}"
+    [ -n "$host" ] && [ -n "${APP_DOMAIN:-}" ] || { echo "host and APP_DOMAIN required"; exit 1; }
+    actor="${SCONIX_PRINCIPAL:-${USER:-operator}}"
+    if [ "$mode" = "--plan" ]; then
+      "$CORE_DEPLOY" plan "$proj" --root "$dir" --host "$host" --domain "$APP_DOMAIN" \
+        --by "$actor" --action promote --source-plan "$canary_plan_id"
+      exit 0
+    fi
+    "$CORE_DEPLOY" verify "$plan_id" --root "$dir" --host "$host" --domain "$APP_DOMAIN" \
+      --action promote --source-plan "$canary_plan_id" >/dev/null
+    promote_failed() { "$CORE_DEPLOY" complete "$plan_id" --status failed --evidence "promotion failed" >/dev/null 2>&1 || true; }
+    trap promote_failed ERR
+    slot="${proj}-canary-${canary_plan_id:0:8}"
+    marker="/srv/$proj/.sconix-canary-$canary_plan_id.json"
+    echo ":: switch production edge route to verified canary slot $slot"
+    ssh "$host" "set -e; test -f '$marker'; grep -q '\"planId\":\"$canary_plan_id\"' '$marker'; grep -q '\"slot\":\"$slot\"' '$marker'; test -f '/srv/$proj/Caddyfile.site'; cp '/srv/edge/sites/$proj.caddy' '/srv/edge/sites/$proj.caddy.pre-promote-$plan_id'; sed -e 's|__DOMAIN__|$APP_DOMAIN|g' -e 's|__API_UPSTREAM__|$slot-api|g' -e 's|__WEB_UPSTREAM__|$slot-web|g' '/srv/$proj/Caddyfile.site' > '/srv/edge/sites/$proj.caddy'; printf '%s\\n' '$canary_plan_id' > '/srv/$proj/.sconix-active-canary'; docker compose -f /srv/edge/compose.yml exec -T caddy caddy reload --config /etc/caddy/Caddyfile"
+    verified=false
+    for attempt in 1 2 3 4 5 6; do
+      if curl -fsS --max-time 10 "https://$APP_DOMAIN/healthz" >/dev/null \
+        && curl -fsS --max-time 10 "https://$APP_DOMAIN/readyz" >/dev/null; then verified=true; break; fi
+      [ "$attempt" -eq 6 ] || sleep 5
+    done
+    [ "$verified" = true ] || { echo "promotion verification failed"; false; }
+    "$CORE_DEPLOY" complete "$plan_id" --status verified --evidence "production route switched to verified canary and healthz/readyz passed" >/dev/null
+    trap - ERR
+    printf -- '- **%s** — promote %s canary %s -> %s\n' "$(date '+%Y-%m-%d %H:%M')" "$proj" "$canary_plan_id" "$APP_DOMAIN" >> "$SYSTEMS/ledger.md"
+    echo ":: promoted. old route saved for rollback; canary remains running"
+    ;;
+
+  teardown)
+    proj="${1:?usage: sx teardown <app> <canary-plan-id> --plan|--approve <plan-id> [user@host]}"
+    canary_plan_id="${2:?usage: sx teardown <app> <canary-plan-id> --plan|--approve <plan-id> [user@host]}"
+    shift 2
+    dir="$APPS/$proj"
+    [ -d "$dir" ] || { echo "no such app: $proj"; exit 1; }
+    [ -f "$dir/deploy.env" ] && . "$dir/deploy.env"
+    mode="${1:-}"; shift || true
+    plan_id=""
+    if [ "$mode" = "--approve" ]; then plan_id="${1:?plan id required}"; shift
+    elif [ "$mode" != "--plan" ]; then echo "teardown requires --plan or --approve"; exit 1
+    fi
+    host="${1:-${DEPLOY_HOST:-}}"
+    [ -n "$host" ] && [ -n "${APP_DOMAIN:-}" ] || { echo "host and APP_DOMAIN required"; exit 1; }
+    actor="${SCONIX_PRINCIPAL:-${USER:-operator}}"
+    if [ "$mode" = "--plan" ]; then
+      "$CORE_DEPLOY" plan "$proj" --root "$dir" --host "$host" --domain "$APP_DOMAIN" \
+        --by "$actor" --action teardown --source-plan "$canary_plan_id"
+      exit 0
+    fi
+    "$CORE_DEPLOY" verify "$plan_id" --root "$dir" --host "$host" --domain "$APP_DOMAIN" \
+      --action teardown --source-plan "$canary_plan_id" >/dev/null
+    teardown_failed() { "$CORE_DEPLOY" complete "$plan_id" --status failed --evidence "canary teardown failed" >/dev/null 2>&1 || true; }
+    trap teardown_failed ERR
+    slot="${proj}-canary-${canary_plan_id:0:8}"
+    marker="/srv/$proj/.sconix-canary-$canary_plan_id.json"
+    echo ":: tear down isolated canary slot $slot"
+    ssh "$host" "set -e; test -f '$marker'; test ! -f '/srv/$proj/.sconix-active-canary' || ! grep -qx '$canary_plan_id' '/srv/$proj/.sconix-active-canary'; cd '/srv/$proj'; SCONIX_SLOT='$slot' docker compose -p '$slot' --profile prod down -v; rm -f '$marker' '/srv/edge/sites/$slot.caddy'; docker compose -f /srv/edge/compose.yml exec -T caddy caddy reload --config /etc/caddy/Caddyfile"
+    "$CORE_DEPLOY" complete "$plan_id" --status verified --evidence "isolated canary stack and route removed" >/dev/null
+    trap - ERR
+    printf -- '- **%s** — teardown %s canary %s\n' "$(date '+%Y-%m-%d %H:%M')" "$proj" "$canary_plan_id" >> "$SYSTEMS/ledger.md"
+    echo ":: canary torn down"
     ;;
 
   restart)

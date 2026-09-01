@@ -27,4 +27,16 @@ The required next template contract is:
 - promotion by switching an edge route, not rebuilding production;
 - verification and rollback records using the same plan ID.
 
+The lifecycle uses separate one-time approvals for each mutating phase:
+
+1. `sx canary` stages and verifies an isolated release.
+2. `sx promote` creates a new approved plan bound to the verified canary plan, then switches
+   the production edge route while keeping the previous route available for rollback.
+3. `sx teardown` requires another approval and removes the canary only when it is not serving
+   production traffic.
+
+The canary stack has its own database and Redis volumes. Applications that need production data
+must provide an explicit data-cloning or compatibility strategy before treating a canary as a
+promotion candidate; Sconix does not copy or reverse database state implicitly.
+
 Shipping a command that merely starts a second stack on the current network is rejected as unsafe.

@@ -121,3 +121,27 @@ def test_canary_plan_is_bound_to_canary_domain(project: Path) -> None:
             "other.demo.example",
             action="canary",
         )
+
+
+def test_promotion_plan_is_bound_to_verified_canary(project: Path) -> None:
+    plan = create_plan(
+        project="demo",
+        project_root=project,
+        host="deploy@example",
+        domain="demo.example",
+        principal=operator(),
+        action="promote",
+        source_plan="1234567890abcdef1234",
+    )
+    assert plan["sourcePlan"] == "1234567890abcdef1234"
+    assert plan["action"]["argv"][:3] == ["sx", "promote", "demo"]
+    approve_plan(plan["id"], operator(), "promote verified canary")
+    with pytest.raises(DeployRecordError, match="sourcePlan"):
+        verify_plan(
+            plan["id"],
+            project,
+            "deploy@example",
+            "demo.example",
+            action="promote",
+            source_plan="different-canary-plan",
+        )

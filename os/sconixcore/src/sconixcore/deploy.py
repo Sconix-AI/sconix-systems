@@ -56,6 +56,7 @@ def create_plan(
     principal: Principal,
     action: str = "deploy",
     release: str | None = None,
+    source_plan: str | None = None,
 ) -> dict[str, Any]:
     sha = _git_sha(project_root)
     argv = ["sx", "deploy", project, "--approve", "<plan-id>"]
@@ -63,6 +64,14 @@ def create_plan(
         argv = ["sx", "rollback", project, release or "<release>", "--approve", "<plan-id>"]
     elif action == "canary":
         argv = ["sx", "canary", project, "--approve", "<plan-id>"]
+    elif action == "promote":
+        argv = [
+            "sx", "promote", project, source_plan or "<canary-plan-id>", "--approve", "<plan-id>"
+        ]
+    elif action == "teardown":
+        argv = [
+            "sx", "teardown", project, source_plan or "<canary-plan-id>", "--approve", "<plan-id>"
+        ]
     body = {
         "schema": "sconix.dev/deploy/plan/v1",
         "project": project,
@@ -86,6 +95,8 @@ def create_plan(
     }
     if release:
         body["release"] = release
+    if source_plan:
+        body["sourcePlan"] = source_plan
     digest_payload = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
     plan_id = hashlib.sha256(digest_payload).hexdigest()[:20]
     body["id"] = plan_id
@@ -122,6 +133,7 @@ def verify_plan(
     *,
     action: str = "deploy",
     release: str | None = None,
+    source_plan: str | None = None,
 ) -> dict[str, Any]:
     plan = load_record("plans", plan_id)
     approval = load_record("approvals", plan_id)
@@ -131,6 +143,7 @@ def verify_plan(
         "domain": domain,
         "action": action,
         "release": release,
+        "sourcePlan": source_plan,
     }
     actual = {**plan, "action": plan["action"]["name"]}
     mismatches = [key for key, value in expected.items() if actual.get(key) != value]
@@ -173,14 +186,18 @@ def _principal(value: str, *, role: str, intent: str) -> Principal:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sconix-deploy")
     commands = parser.add_subparsers(dest="command", required=True)
+    actions = ("deploy", "rollback", "canary", "promote", "teardown")
     plan = commands.add_parser("plan")
     plan.add_argument("project")
     plan.add_argument("--root", required=True, type=Path)
     plan.add_argument("--host", required=True)
     plan.add_argument("--domain", required=True)
     plan.add_argument("--by", required=True)
-    plan.add_argument("--action", choices=("deploy", "rollback", "canary"), default="deploy")
+    plan.add_argument(
+        "--action", choices=actions, default="deploy"
+    )
     plan.add_argument("--release")
+    plan.add_argument("--source-plan")
     approve = commands.add_parser("approve")
     approve.add_argument("plan_id")
     approve.add_argument("--by", required=True)
@@ -190,8 +207,11 @@ def _parser() -> argparse.ArgumentParser:
     verify.add_argument("--root", required=True, type=Path)
     verify.add_argument("--host", required=True)
     verify.add_argument("--domain", required=True)
-    verify.add_argument("--action", choices=("deploy", "rollback", "canary"), default="deploy")
+    verify.add_argument(
+        "--action", choices=actions, default="deploy"
+    )
     verify.add_argument("--release")
+    verify.add_argument("--source-plan")
     complete = commands.add_parser("complete")
     complete.add_argument("plan_id")
     complete.add_argument("--status", choices=("verified", "failed"), required=True)
@@ -214,6 +234,7 @@ def main(argv: list[str] | None = None) -> int:
                 principal=_principal(args.by, role="operator", intent="plan deployment"),
                 action=args.action,
                 release=args.release,
+                source_plan=args.source_plan,
             )
         elif args.command == "approve":
             value = approve_plan(
@@ -229,6 +250,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.domain,
                 action=args.action,
                 release=args.release,
+                source_plan=args.source_plan,
             )
         elif args.command == "complete":
             value = complete_plan(args.plan_id, status=args.status, evidence=args.evidence)
