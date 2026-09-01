@@ -4,7 +4,9 @@ The money view. One block per app (`sx ledger "..."` appends a dated note).
 
 | app | domain | status | plans | MRR | monthly cost |
 |-----|--------|--------|-------|-----|--------------|
-| _(none yet)_ | | | | $0 | $0 |
+| relnotes | relnotes.204-168-172-115.sslip.io | live, Stripe test mode | free 5/mo; Pro $12 draft | $0 | shared €6.49 box |
+| skillforge | skillforge.204-168-172-115.sslip.io | live, free | free | $0 | shared €6.49 box |
+| trim | — | parked after deployment proof | free | $0 | $0 |
 
 ## Notes
 

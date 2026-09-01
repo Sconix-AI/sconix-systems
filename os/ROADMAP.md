@@ -12,7 +12,7 @@ See `STACK.md` for the locked stack. This is build order.
 - [x] SQLite path for zero-Docker local dev (db.py sqlite-aware, aiosqlite dep, `.env` default)
 - [x] first Alembic migration generated from `models.py` (trim); web `pnpm install` + `next build` verified
 - [ ] `task dev` full loop with Postgres — **blocked on Docker in WSL**
-- [ ] install `sops` + `age` (substrate secrets — MISSING per `sx doctor`)
+- [x] `sops` + `age` installed; `sx secrets` and deploy-time decryption verified
 
 ## Phase 1 — first real app: `trim` (link shortener)
 
@@ -27,10 +27,11 @@ See `STACK.md` for the locked stack. This is build order.
 - [ ] stress test: `hey`/`wrk` against `https://<domain>/<code>`, watch `/api/stats` + `docker stats`
 - [ ] push `sconix-systems` + `sconix-template-web` to GitHub (blocked: harness classifier — user runs `gh repo create`)
 
-## Phase 1b — auth + billing (next app that needs them)
+## Phase 1b — auth + billing
 
-- [ ] `sconixapp.billing` — Stripe checkout + portal + webhook + entitlement gate
-- [ ] `sconixapp.auth` wired: fastapi-users, Google OAuth, magic link, reset
+- [x] `sconixapp.billing` — Stripe checkout + portal + webhook + entitlement gate
+- [x] `sconixapp.auth` — lean email/password auth with an httpOnly session cookie
+- [ ] auth follow-ups: email verification, magic link, password reset, OAuth
 
 ## Phase 2 — harden
 

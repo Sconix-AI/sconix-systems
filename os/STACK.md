@@ -34,7 +34,7 @@ Two languages, never a third: **Python + TypeScript.**
 | DB | **Postgres 16** (container) | portable, no managed bill |
 | Cache / queue / rate-limit | **Redis 7** (container) | one dep, three jobs |
 | Background + scheduled jobs | **arq** | async-native, Redis-backed, no serverless timeout |
-| Auth | **fastapi-users** — JWT access+refresh, OAuth (Google/GitHub/Apple), verify + reset | in-process, owns users in your Postgres, zero extra service |
+| Auth | **`sconixapp.auth`** — email/password + signed httpOnly session cookie; verification, reset, magic link, and OAuth later | smaller proven surface; owns users in Postgres, zero extra service |
 | Payments | **Stripe** = source of truth · **RevenueCat** bridges iOS/Android IAP | stores force IAP for consumer digital goods |
 | Transactional email | **Resend** | cheap, React-email templates |
 | Web app | **Next.js 16 (App Router)**, self-hosted (`output: standalone`) in Docker | paved road, SSR marketing + app in one, shadcn out of the box; used as client + BFF, real API is FastAPI |
@@ -50,7 +50,8 @@ Two languages, never a third: **Python + TypeScript.**
 |---|---|
 | Compute | **Hetzner VPS** + Docker Compose + **Caddy** (auto-TLS, per-domain routing); many apps per box until one earns its own |
 | Monorepo tooling | **pnpm workspaces + Turborepo** (TS) · **uv** (Python) · top-level `Taskfile.yml` |
-| CI/CD | **GitHub Actions** -> build images -> **GHCR** -> `sx deploy` SSHes in -> `docker compose up -d` |
+| Delivery now | **`sx deploy`** -> rsync source -> remote Docker Compose build -> migrate -> health check |
+| CI/CD later | **GitHub Actions** -> build images -> **GHCR** -> versioned deploy after remotes and rollback exist |
 | DNS / edge / WAF | **Cloudflare** free tier |
 | Secrets | **SOPS + age** — encrypted files in the repo, decrypt in CI and on the box |
 | Errors | **Sentry** free tier — one project each for api / web / mobile |
@@ -58,7 +59,16 @@ Two languages, never a third: **Python + TypeScript.**
 | Uptime | **Uptime Kuma** on the box |
 | Backups / object storage | **Cloudflare R2** or **Backblaze B2** — nightly `pg_dump` |
 | API contract format | **OpenAPI** — clients are generated, never hand-written |
-| Auth model | stateless **access token + refresh token** |
+| Auth model | signed JWT in an **httpOnly same-site session cookie** |
+
+### Decision changes
+
+- **2026-08-31 — auth:** replaced the planned `fastapi-users` integration with the smaller
+  proven `sconixapp.auth` surface. Add verification, reset, magic link, and OAuth only when an
+  app requires them.
+- **2026-08-31 — delivery:** recorded the deployed reality: `sx deploy` currently performs a
+  remote Compose build. GHCR-based CI/CD remains the graduation path after GitHub remotes,
+  immutable releases, and rollback are in place.
 
 ## Deliberately deferred
 
