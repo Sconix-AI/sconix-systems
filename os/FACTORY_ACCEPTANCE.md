@@ -6,14 +6,16 @@ an application outside its temporary directory.
 
 ## Install
 
-From a clone of `sconix-systems`, run:
+From any clone of `sconix-systems`, run:
 
 ```bash
 bash os/install.sh
 ```
 
 The host must provide `git` and `uv`. The installer provisions `copier`, installs
-the local `sconixcore` package, and links `sx` into `~/bin`.
+the local `sconixcore` package, and links `sx` into `~/bin`. `sx` resolves the
+clone location from its installed path, so the repository does not need to live
+at `~/systems`.
 
 ## Acceptance test
 

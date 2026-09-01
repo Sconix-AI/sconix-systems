@@ -2,9 +2,10 @@
 # Sconix Systems — one command. Thin on purpose. Mirrors ~/research/os/bin/sconix.
 set -euo pipefail
 
-OS="$HOME/systems/os"
-APPS="$HOME/systems/apps"
-SYSTEMS="$HOME/systems"
+SX_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+OS="$(cd -- "$(dirname -- "$SX_PATH")/.." && pwd)"
+SYSTEMS="$(cd -- "$OS/.." && pwd)"
+APPS="$SYSTEMS/apps"
 TEMPLATE="$OS/template-web"
 APPLIB="$OS/sconixapp"
 CORE_DEPLOY="$OS/sconixcore/.venv/bin/sconix-deploy"
