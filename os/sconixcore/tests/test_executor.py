@@ -113,12 +113,11 @@ def test_undeclared_action_is_denied() -> None:
 def write_agent_manifest(root: Path) -> None:
     root.joinpath("sconix.yaml").write_text(
         "schema: sconix.dev/project/v1\n"
-        "kind: application\nname: Pilot\nslug: pilot\n"
+        "kind: application\nname: Drill\nslug: drill\n"
         "lifecycle: {status: active}\n"
         "commands:\n"
-        "  restart_app:\n"
-        "    run: [sx, restart, '{target}']\n"
-        "    arguments: [target]\n"
+        "  restart:\n"
+        "    run: [sx, restart, '{project}']\n"
         "    risk: external-write\n"
         "    approval: policy\n"
         "    idempotent: true\n"
@@ -129,7 +128,9 @@ def write_agent_manifest(root: Path) -> None:
 def test_manifest_executor_matches_agent_seam_with_explicit_authority(
     tmp_path: Path,
 ) -> None:
-    write_agent_manifest(tmp_path)
+    project = tmp_path / "drill"
+    project.mkdir()
+    write_agent_manifest(project)
     seen: list[tuple[str, ...]] = []
 
     def runner(argv: tuple[str, ...], cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -138,7 +139,7 @@ def test_manifest_executor_matches_agent_seam_with_explicit_authority(
 
     async def decide(name, target, spec, actor):
         assert (name, target, spec.risk.value, actor.id) == (
-            "restart_app",
+            "restart",
             "drill",
             "external-write",
             "pilot",
@@ -151,9 +152,9 @@ def test_manifest_executor_matches_agent_seam_with_explicit_authority(
         decision_provider=decide,
         runner=runner,
     )
-    assert executor.lookup("restart_app") is not None
-    assert executor.lookup("delete_env") is None
-    result = asyncio.run(executor.execute("restart_app", target="drill"))
+    assert executor.lookup("drill", "restart") is not None
+    assert executor.lookup("drill", "delete_env") is None
+    result = asyncio.run(executor.execute("drill", "restart"))
     assert result.ok and result.argv == ("sx", "restart", "drill")
     assert "restarted drill" in result.output and "warning" in result.output
     assert result.duration_ms >= 0
@@ -161,9 +162,11 @@ def test_manifest_executor_matches_agent_seam_with_explicit_authority(
 
 
 def test_manifest_executor_fails_closed_without_authority(tmp_path: Path) -> None:
-    write_agent_manifest(tmp_path)
+    project = tmp_path / "drill"
+    project.mkdir()
+    write_agent_manifest(project)
     executor = ManifestExecutor(tmp_path)
     with pytest.raises(ActionError, match="principal required"):
-        asyncio.run(executor.execute("restart_app", target="drill"))
+        asyncio.run(executor.execute("drill", "restart"))
     with pytest.raises(KeyError, match="undeclared action"):
-        asyncio.run(executor.execute("delete_env", target="drill"))
+        asyncio.run(executor.execute("drill", "delete_env", principal=principal()))

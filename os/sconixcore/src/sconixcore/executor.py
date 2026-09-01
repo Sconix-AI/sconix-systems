@@ -177,43 +177,70 @@ class ManifestExecutor:
         decision_provider: DecisionProvider | None = None,
         runner: Runner = _run,
     ) -> None:
-        from sconixcore.manifest import inspect_project
-
-        inspection = inspect_project(project_dir, strict=True)
-        self.root = inspection.root
-        self.manifest = inspection.manifest
+        self.projects_dir = Path(project_dir).resolve()
         self.principal = principal
         self.decision_provider = decision_provider
         self.runner = runner
+        self._projects: dict[str, tuple[Path, dict[str, Any]]] = {}
 
-    def lookup(self, name: str) -> ActionSpec | None:
-        return lookup_action(self.manifest, name)
+    def _project(self, target: str) -> tuple[Path, dict[str, Any]]:
+        from sconixcore.manifest import ManifestError, inspect_project
+
+        if target in self._projects:
+            return self._projects[target]
+        candidates = (self.projects_dir / target, self.projects_dir)
+        for candidate in candidates:
+            try:
+                inspection = inspect_project(candidate, strict=True)
+            except ManifestError:
+                continue
+            if inspection.manifest["slug"] == target:
+                value = (inspection.root, inspection.manifest)
+                self._projects[target] = value
+                return value
+        raise KeyError(f"no manifest for target {target!r}")
+
+    def lookup(self, target: str, name: str | None = None) -> ActionSpec | None:
+        if name is None:
+            root, manifest = self._project(self.projects_dir.name)
+            return lookup_action(manifest, target)
+        _, manifest = self._project(target)
+        return lookup_action(manifest, name)
 
     async def execute(
         self,
-        name: str,
-        *,
         target: str,
+        name: str | None = None,
+        *,
         principal: Principal | None = None,
         decision: Decision | None = None,
-        **arguments: str,
+        arguments: Mapping[str, str] | None = None,
+        **legacy_arguments: str,
     ) -> ExecutionResult:
-        spec = self.lookup(name)
+        if name is None:
+            legacy_target = legacy_arguments.pop("target", None)
+            if legacy_target is None:
+                raise ActionError("target required for manifest execution")
+            name, target = target, legacy_target
+        root, manifest = self._project(target)
+        spec = lookup_action(manifest, name)
         if spec is None:
             raise KeyError(f"undeclared action {name!r}")
         actor = principal or self.principal
         if actor is None:
             raise ActionError(f"principal required for action: {name}")
-        if "target" in self.manifest["commands"][name].get("arguments", []):
-            arguments = {"target": target, **arguments}
+        bound = dict(arguments or {})
+        bound.update(legacy_arguments)
+        if "target" in manifest["commands"][name].get("arguments", []):
+            bound = {"target": target, **bound}
         if decision is None and self.decision_provider is not None:
             value = self.decision_provider(name, target, spec, actor)
             decision = await value if isinstance(value, Awaitable) else value
-        action = resolve_action(self.manifest, name, arguments)
+        action = resolve_action(manifest, name, bound)
         authorize_action(target, action, actor, decision)
         if self.runner is not _run:
             started = time.monotonic()
-            completed = self.runner(action.argv, self.root)
+            completed = self.runner(action.argv, root)
             return ExecutionResult(
                 action,
                 completed.returncode,
@@ -224,7 +251,7 @@ class ManifestExecutor:
         started = time.monotonic()
         process = await create_subprocess_exec(
             *action.argv,
-            cwd=self.root,
+            cwd=root,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
