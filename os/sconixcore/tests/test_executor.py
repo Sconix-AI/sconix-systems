@@ -1,3 +1,4 @@
+import asyncio
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -8,6 +9,7 @@ from sconixcore import (
     ActionError,
     Decision,
     DecisionOutcome,
+    ManifestExecutor,
     Principal,
     PrincipalKind,
     execute_action,
@@ -106,3 +108,62 @@ def test_scope_and_decision_fail_closed(tmp_path: Path) -> None:
 def test_undeclared_action_is_denied() -> None:
     with pytest.raises(ActionError, match="undeclared action"):
         resolve_action(manifest(), "delete_everything")
+
+
+def write_agent_manifest(root: Path) -> None:
+    root.joinpath("sconix.yaml").write_text(
+        "schema: sconix.dev/project/v1\n"
+        "kind: application\nname: Pilot\nslug: pilot\n"
+        "lifecycle: {status: active}\n"
+        "commands:\n"
+        "  restart_app:\n"
+        "    run: [sx, restart, '{target}']\n"
+        "    arguments: [target]\n"
+        "    risk: external-write\n"
+        "    approval: policy\n"
+        "    idempotent: true\n"
+        "    verify: {checks: [healthz], attempts: 3, intervalSeconds: 2}\n"
+    )
+
+
+def test_manifest_executor_matches_agent_seam_with_explicit_authority(
+    tmp_path: Path,
+) -> None:
+    write_agent_manifest(tmp_path)
+    seen: list[tuple[str, ...]] = []
+
+    def runner(argv: tuple[str, ...], cwd: Path) -> subprocess.CompletedProcess[str]:
+        seen.append(argv)
+        return subprocess.CompletedProcess(argv, 0, "restarted drill", "warning")
+
+    async def decide(name, target, spec, actor):
+        assert (name, target, spec.risk.value, actor.id) == (
+            "restart_app",
+            "drill",
+            "external-write",
+            "pilot",
+        )
+        return allow()
+
+    executor = ManifestExecutor(
+        tmp_path,
+        principal=principal(("drill",)),
+        decision_provider=decide,
+        runner=runner,
+    )
+    assert executor.lookup("restart_app") is not None
+    assert executor.lookup("delete_env") is None
+    result = asyncio.run(executor.execute("restart_app", target="drill"))
+    assert result.ok and result.argv == ("sx", "restart", "drill")
+    assert "restarted drill" in result.output and "warning" in result.output
+    assert result.duration_ms >= 0
+    assert seen == [("sx", "restart", "drill")]
+
+
+def test_manifest_executor_fails_closed_without_authority(tmp_path: Path) -> None:
+    write_agent_manifest(tmp_path)
+    executor = ManifestExecutor(tmp_path)
+    with pytest.raises(ActionError, match="principal required"):
+        asyncio.run(executor.execute("restart_app", target="drill"))
+    with pytest.raises(KeyError, match="undeclared action"):
+        asyncio.run(executor.execute("delete_env", target="drill"))

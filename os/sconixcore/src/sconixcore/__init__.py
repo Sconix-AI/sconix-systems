@@ -10,7 +10,14 @@ from sconixcore.contracts import (
     Risk,
     Verification,
 )
-from sconixcore.executor import ActionError, ExecutionResult, execute_action, resolve_action
+from sconixcore.executor import (
+    ActionError,
+    ExecutionResult,
+    ManifestExecutor,
+    execute_action,
+    lookup_action,
+    resolve_action,
+)
 from sconixcore.manifest import Inspection, ManifestError, inspect_project
 
 __all__ = [
@@ -22,12 +29,14 @@ __all__ = [
     "Inspection",
     "ExecutionResult",
     "ManifestError",
+    "ManifestExecutor",
     "Principal",
     "PrincipalKind",
     "Risk",
     "Verification",
     "execute_action",
     "inspect_project",
+    "lookup_action",
     "resolve_action",
 ]
 __version__ = "0.1.0"
