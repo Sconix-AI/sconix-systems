@@ -35,12 +35,12 @@ capabilities:
   billing: {provider: stripe}
   deploy: {provider: compose-ssh}
 commands:
-  test: {run: task test, risk: local-write, approval: never}
+  test: {run: [task, test], risk: local-write, approval: never}
   deploy:
-    run: sx deploy relnotes
+    run: [sx, deploy, relnotes]
     risk: external-write
     approval: always
-    verify: [healthz]
+    verify: {checks: [healthz], withinSeconds: 60, attempts: 6, intervalSeconds: 5}
 agents:
   instructions: [AGENTS.md]
   context: [README.md, app.yaml]
@@ -57,4 +57,3 @@ the v1 in-memory model; report inferred and missing fields without mutation; emi
 - Principal, action, approval, execution, incident, and audit schemas.
 - Provider secret/configuration contracts.
 - Organization ownership and policy attachment.
-- Whether command `run` becomes an argv array before v1 is stable.

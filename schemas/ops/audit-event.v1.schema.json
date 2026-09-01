@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sconix.dev/ops/audit-event/v1",
+  "title": "Sconix Audit Event v1",
+  "type": "object",
+  "required": ["schema", "id", "actionId", "stage", "principal", "occurredAt"],
+  "properties": {
+    "schema": {"const": "sconix.dev/ops/audit-event/v1"},
+    "id": {"type": "string", "minLength": 1},
+    "actionId": {"type": "string", "minLength": 1},
+    "incidentId": {"type": "string"},
+    "stage": {"enum": ["proposed", "approved", "denied", "deferred", "executed", "verified", "failed", "recovered"]},
+    "principal": {"$ref": "principal.v1.schema.json"},
+    "evidence": {"type": "array", "items": {"type": "object"}},
+    "message": {"type": "string"},
+    "occurredAt": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": false
+}

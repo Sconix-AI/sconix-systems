@@ -51,11 +51,21 @@
     "command": {
       "type": "object", "required": ["run", "risk"], "additionalProperties": false,
       "properties": {
-        "description": {"type": "string"}, "run": {"type": "string", "minLength": 1},
+        "description": {"type": "string"},
+        "run": {"type": "array", "items": {"type": "string"}, "minItems": 1},
         "risk": {"enum": ["read-only", "local-write", "external-write", "destructive"]},
         "approval": {"enum": ["never", "policy", "always"], "default": "policy"},
         "timeoutSeconds": {"type": "integer", "minimum": 1},
-        "verify": {"type": "array", "items": {"type": "string", "minLength": 1}}
+        "verify": {"$ref": "#/$defs/verification"}
+      }
+    },
+    "verification": {
+      "type": "object", "required": ["checks"], "additionalProperties": false,
+      "properties": {
+        "checks": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+        "withinSeconds": {"type": "integer", "minimum": 1, "default": 30},
+        "attempts": {"type": "integer", "minimum": 1, "default": 3},
+        "intervalSeconds": {"type": "number", "minimum": 0, "default": 2}
       }
     }
   }

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sconix.dev/ops/incident/v0alpha1",
+  "title": "Sconix Incident v0alpha1",
+  "description": "Experimental lifecycle extracted from Pilot; not stable until a second operator validates it.",
+  "type": "object",
+  "required": ["schema", "id", "project", "target", "state", "principal", "detectedAt"],
+  "properties": {
+    "schema": {"const": "sconix.dev/ops/incident/v0alpha1"},
+    "id": {"type": "string", "minLength": 1},
+    "project": {"type": "string", "minLength": 1},
+    "target": {"type": "string", "minLength": 1},
+    "state": {"enum": ["detected", "diagnosed", "proposed", "approved", "acted", "verified", "resolved", "escalated"]},
+    "principal": {"$ref": "principal.v1.schema.json"},
+    "diagnosis": {"type": "string"},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "evidence": {"type": "array", "items": {"type": "object"}},
+    "actionIds": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "costUsd": {"type": "number", "minimum": 0},
+    "outcome": {"type": "string"},
+    "ticks": {"type": "integer", "minimum": 1},
+    "detectedAt": {"type": "string", "format": "date-time"},
+    "actedAt": {"type": "string", "format": "date-time"},
+    "verifiedAt": {"type": "string", "format": "date-time"},
+    "closedAt": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": false
+}

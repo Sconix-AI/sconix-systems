@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sconix.dev/ops/action/v1",
+  "title": "Sconix Action Plan v1",
+  "type": "object",
+  "required": ["schema", "id", "project", "principal", "action", "status", "createdAt"],
+  "properties": {
+    "schema": {"const": "sconix.dev/ops/action/v1"},
+    "id": {"type": "string", "minLength": 1},
+    "project": {"type": "string", "minLength": 1},
+    "principal": {"$ref": "principal.v1.schema.json"},
+    "action": {
+      "type": "object", "required": ["name", "argv", "risk", "idempotent", "approval", "verification"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z][a-z0-9._-]*$"},
+        "argv": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "arguments": {"type": "object"},
+        "risk": {"enum": ["read-only", "local-write", "external-write", "destructive"]},
+        "sideEffects": {"type": "array", "items": {"type": "string"}},
+        "preconditions": {"type": "array", "items": {"type": "string"}},
+        "idempotent": {"type": "boolean"},
+        "approval": {"enum": ["never", "policy", "always"]},
+        "verification": {
+          "type": "object", "required": ["checks"],
+          "properties": {
+            "checks": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+            "withinSeconds": {"type": "integer", "minimum": 1},
+            "attempts": {"type": "integer", "minimum": 1},
+            "intervalSeconds": {"type": "number", "minimum": 0}
+          },
+          "additionalProperties": false
+        },
+        "rollback": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "status": {"enum": ["proposed", "approved", "denied", "deferred", "executing", "executed", "verified", "failed"]},
+    "decision": {
+      "type": "object", "required": ["outcome", "decidedBy", "decidedAt"],
+      "properties": {
+        "outcome": {"enum": ["allow", "allow-once", "deny", "defer"]},
+        "reason": {"type": "string"},
+        "decidedBy": {"$ref": "principal.v1.schema.json"},
+        "decidedAt": {"type": "string", "format": "date-time"},
+        "expiresAt": {"type": "string", "format": "date-time"}
+      },
+      "additionalProperties": false
+    },
+    "createdAt": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": false
+}

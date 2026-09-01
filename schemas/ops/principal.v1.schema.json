@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sconix.dev/ops/principal/v1",
+  "title": "Sconix Principal v1",
+  "type": "object",
+  "required": ["kind", "id"],
+  "properties": {
+    "kind": {"enum": ["human", "agent", "service", "ci"]},
+    "id": {"type": "string", "minLength": 1},
+    "role": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+    "intent": {"type": "string"},
+    "scope": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+  },
+  "additionalProperties": false
+}
