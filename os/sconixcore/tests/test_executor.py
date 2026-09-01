@@ -170,3 +170,34 @@ def test_manifest_executor_fails_closed_without_authority(tmp_path: Path) -> Non
         asyncio.run(executor.execute("drill", "restart"))
     with pytest.raises(KeyError, match="undeclared action"):
         asyncio.run(executor.execute("drill", "delete_env", principal=principal()))
+
+
+def test_manifest_executor_accepts_pilot_supplied_resolver(tmp_path: Path) -> None:
+    project = tmp_path / "custom-root"
+    project.mkdir()
+    write_agent_manifest(project)
+    from sconixcore import inspect_project
+
+    manifest_value = inspect_project(project, strict=True).manifest
+    calls: list[str] = []
+
+    def resolve(target: str):
+        calls.append(target)
+        return manifest_value, project
+
+    def runner(argv: tuple[str, ...], cwd: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(argv, 0, "ok", "")
+
+    executor = ManifestExecutor(resolve=resolve, runner=runner)
+    assert executor.lookup("drill", "restart") is not None
+    result = asyncio.run(
+        executor.execute(
+            "drill",
+            "restart",
+            principal=principal(("drill",)),
+            decision=allow(),
+            arguments={},
+        )
+    )
+    assert result.ok and result.argv == ("sx", "restart", "drill")
+    assert calls == ["drill", "drill"]

@@ -48,6 +48,7 @@ class ExecutionResult:
 
 
 Runner = Callable[[tuple[str, ...], Path], subprocess.CompletedProcess[str]]
+ProjectResolver = Callable[[str], tuple[Mapping[str, Any], Path]]
 DecisionProvider = Callable[
     [str, str, ActionSpec, Principal], Decision | Awaitable[Decision]
 ]
@@ -171,13 +172,17 @@ class ManifestExecutor:
 
     def __init__(
         self,
-        project_dir: str | Path,
+        project_dir: str | Path | None = None,
         *,
+        resolve: ProjectResolver | None = None,
         principal: Principal | None = None,
         decision_provider: DecisionProvider | None = None,
         runner: Runner = _run,
     ) -> None:
-        self.projects_dir = Path(project_dir).resolve()
+        if project_dir is None and resolve is None:
+            raise ValueError("project_dir or resolve is required")
+        self.projects_dir = Path(project_dir).resolve() if project_dir is not None else None
+        self.resolve = resolve
         self.principal = principal
         self.decision_provider = decision_provider
         self.runner = runner
@@ -186,8 +191,12 @@ class ManifestExecutor:
     def _project(self, target: str) -> tuple[Path, dict[str, Any]]:
         from sconixcore.manifest import ManifestError, inspect_project
 
+        if self.resolve is not None:
+            manifest, root = self.resolve(target)
+            return Path(root).resolve(), dict(manifest)
         if target in self._projects:
             return self._projects[target]
+        assert self.projects_dir is not None
         candidates = (self.projects_dir / target, self.projects_dir)
         for candidate in candidates:
             try:
@@ -202,6 +211,8 @@ class ManifestExecutor:
 
     def lookup(self, target: str, name: str | None = None) -> ActionSpec | None:
         if name is None:
+            if self.projects_dir is None:
+                raise ActionError("target and action name are required with a resolver")
             root, manifest = self._project(self.projects_dir.name)
             return lookup_action(manifest, target)
         _, manifest = self._project(target)
