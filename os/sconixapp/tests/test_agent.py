@@ -11,6 +11,7 @@ from sconixapp.agent import (
     WORKER,
     AgentRun,
     cost_usd,
+    guarded_tool,
     monthly_tokens,
     pick_model,
     run_agent,
@@ -175,6 +176,36 @@ async def test_run_agent_with_tools_uses_the_runner(session) -> None:
     assert result.run.turns == 2
     assert result.run.input_tokens == 30
     assert "tools" in client.beta.messages.calls[0]
+
+
+async def test_guarded_tool_blocks_and_allows() -> None:
+    calls: list[str] = []
+
+    async def restart_app(app: str) -> str:
+        """Restart one app."""
+        calls.append(app)
+        return f"restarted {app}"
+
+    seen: list[tuple[str, dict]] = []
+
+    async def deny(name: str, kwargs: dict) -> str:
+        seen.append((name, kwargs))
+        return "app is healthy — no restart"
+
+    async def allow(name: str, kwargs: dict) -> bool:
+        return True
+
+    blocked = guarded_tool(restart_app, guard=deny)
+    assert blocked.name == "restart_app"
+    # schema inference still sees the wrapped signature
+    assert blocked.to_dict()["input_schema"]["required"] == ["app"]
+
+    res = await blocked.call({"app": "relnotes"})
+    assert res.startswith("BLOCKED:") and "healthy" in res
+    assert calls == [] and seen == [("restart_app", {"app": "relnotes"})]
+
+    ok = await guarded_tool(restart_app, guard=allow).call({"app": "relnotes"})
+    assert ok == "restarted relnotes" and calls == ["relnotes"]
 
 
 async def test_pick_model_soft_degrades_past_ceiling(session) -> None:

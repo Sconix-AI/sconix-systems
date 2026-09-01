@@ -25,6 +25,8 @@ sx — Sconix Systems
   sx deploy <app> [user@host]
                           rsync -> build -> up -> migrate -> health-check
                           (reads apps/<app>/deploy.env: DEPLOY_HOST, APP_DOMAIN)
+  sx restart <app> [user@host]
+                          restart a deployed app's containers in place (no rebuild)
   sx doctor               check the toolchain
 EOF
 }
@@ -262,6 +264,24 @@ REMOTE
     fi
     printf -- '- **%s** — deploy %s -> %s (%s)\n' "$(date '+%Y-%m-%d %H:%M')" "$proj" "$APP_DOMAIN" "$(git -C "$dir" rev-parse --short HEAD)" >> "$SYSTEMS/ledger.md"
     echo ":: deployed. ledger updated."
+    ;;
+
+  restart)
+    proj="${1:?usage: sx restart <app> [user@host]}"
+    dir="$APPS/$proj"
+    [ -d "$dir" ] || { echo "no such app: $proj"; exit 1; }
+    [ -f "$dir/deploy.env" ] && . "$dir/deploy.env"
+    host="${2:-${DEPLOY_HOST:-}}"
+    [ -n "$host" ] || { echo "no host — pass one or set DEPLOY_HOST in $dir/deploy.env"; exit 1; }
+    echo ":: restart $proj on $host"
+    ssh "$host" "cd /srv/$proj && docker compose --profile prod restart"
+    if [ -n "${APP_DOMAIN:-}" ]; then
+      sleep 3
+      curl -fsS --max-time 10 "https://$APP_DOMAIN/healthz" >/dev/null \
+        && echo "   https://$APP_DOMAIN/healthz OK" \
+        || echo "   WARN: health check failed after restart"
+    fi
+    printf -- '- **%s** — restart %s on %s\n' "$(date '+%Y-%m-%d %H:%M')" "$proj" "$host" >> "$SYSTEMS/ledger.md"
     ;;
 
   doctor)

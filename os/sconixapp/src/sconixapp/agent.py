@@ -24,8 +24,9 @@ Needs the ``agent`` extra: ``uv add "sconixapp[agent]"`` (pulls ``anthropic``).
 
 from __future__ import annotations
 
+import functools
 import time
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -136,6 +137,37 @@ async def pick_model(
         log.info("agent.ceiling.hit", user_id=user_id, ceiling=ceiling, floor=floor)
         return floor
     return preferred
+
+
+# A guard decides whether one mutating tool call may proceed. Return ``True`` to
+# allow; return a string (the reason) or ``False`` to block — the model gets the
+# reason back as the tool result and carries on.
+Guard = Callable[[str, dict[str, Any]], Awaitable[bool | str]]
+
+
+def guarded_tool(fn: Any, *, guard: Guard) -> Any:
+    """Wrap an async tool function so ``guard(name, kwargs)`` runs before it does.
+
+    Use for any tool with real side effects (restart, deploy, delete). The
+    returned object is a normal ``@beta_async_tool`` — schema inference still
+    sees ``fn``'s signature — so it drops straight into ``run_agent(tools=...)``.
+
+        tools = [read_only_probe, guarded_tool(restart_app, guard=my_policy)]
+    """
+    from anthropic import beta_async_tool
+
+    name = getattr(fn, "__name__", "tool")
+
+    @functools.wraps(fn)
+    async def _inner(**kwargs: Any) -> Any:
+        verdict = await guard(name, kwargs)
+        if verdict is not True:
+            reason = verdict if isinstance(verdict, str) else "operator denied this action"
+            log.info("agent.tool.blocked", tool=name, reason=reason)
+            return f"BLOCKED: {reason}"
+        return await fn(**kwargs)
+
+    return beta_async_tool(_inner)
 
 
 async def run_agent(
