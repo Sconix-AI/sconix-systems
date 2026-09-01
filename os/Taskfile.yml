@@ -2,6 +2,11 @@
 version: "3"
 
 tasks:
+  factory:
+    desc: Validate a generated application from the template
+    cmds:
+      - SKIP_WEB=1 bash test_template.sh
+
   test:
     desc: Test sconixapp + generate a demo app and check it lints/imports
     cmds:

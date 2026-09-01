@@ -3,11 +3,12 @@
 # Set SKIP_WEB=1 to skip the (slower) pnpm install + next build.
 set -euo pipefail
 
-OS="$HOME/systems/os"
+OS="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 TMP="$(mktemp -d /tmp/sx-template.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
 
 copier copy --trust --defaults \
+  --vcs-ref HEAD \
   --data app_name="Regression Demo" \
   --data app_slug="regression-demo" \
   --data pitch="engine self-test" \
@@ -23,7 +24,8 @@ test -f docker-compose.yml
 test -f Caddyfile.site
 test -f sconix.yaml
 grep -q '__API_UPSTREAM__' Caddyfile.site
-grep -q 'SCONIX_SLOT' docker-compose.yml
+grep -q '\${SCONIX_SLOT:-regression-demo}-api' docker-compose.yml
+grep -q '\${SCONIX_SLOT:-regression-demo}-web' docker-compose.yml
 # leaked Jinja looks like `{{ var }}` / `{% ... %}` / `{# ... #}`; JSX inline
 # objects (`={{`, `{{ ... }}` without a bare identifier) are fine.
 ! grep -rnE '\{\{ [a-z_]+ \}\}|\{%[-+ ]|\{#' api web packages \
