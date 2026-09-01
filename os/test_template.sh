@@ -21,12 +21,14 @@ test -f api/pyproject.toml
 test -f web/package.json
 test -f docker-compose.yml
 test -f Caddyfile.site
+test -f sconix.yaml
 # leaked Jinja looks like `{{ var }}` / `{% ... %}` / `{# ... #}`; JSX inline
 # objects (`={{`, `{{ ... }}` without a bare identifier) are fine.
 ! grep -rnE '\{\{ [a-z_]+ \}\}|\{%[-+ ]|\{#' api web packages \
   || { echo "unrendered jinja left in output"; exit 1; }
 
 test -f web/lib/config.ts        # config.ts.jinja must have rendered
+"$OS/sconixcore/.venv/bin/sconix-inspect" . --strict --json >/dev/null
 
 TMPDIR=/tmp uv sync --project api
 uv run --project api ruff check api
