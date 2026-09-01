@@ -61,6 +61,8 @@ def create_plan(
     argv = ["sx", "deploy", project, "--approve", "<plan-id>"]
     if action == "rollback":
         argv = ["sx", "rollback", project, release or "<release>", "--approve", "<plan-id>"]
+    elif action == "canary":
+        argv = ["sx", "canary", project, "--approve", "<plan-id>"]
     body = {
         "schema": "sconix.dev/deploy/plan/v1",
         "project": project,
@@ -177,7 +179,7 @@ def _parser() -> argparse.ArgumentParser:
     plan.add_argument("--host", required=True)
     plan.add_argument("--domain", required=True)
     plan.add_argument("--by", required=True)
-    plan.add_argument("--action", choices=("deploy", "rollback"), default="deploy")
+    plan.add_argument("--action", choices=("deploy", "rollback", "canary"), default="deploy")
     plan.add_argument("--release")
     approve = commands.add_parser("approve")
     approve.add_argument("plan_id")
@@ -188,7 +190,7 @@ def _parser() -> argparse.ArgumentParser:
     verify.add_argument("--root", required=True, type=Path)
     verify.add_argument("--host", required=True)
     verify.add_argument("--domain", required=True)
-    verify.add_argument("--action", choices=("deploy", "rollback"), default="deploy")
+    verify.add_argument("--action", choices=("deploy", "rollback", "canary"), default="deploy")
     verify.add_argument("--release")
     complete = commands.add_parser("complete")
     complete.add_argument("plan_id")

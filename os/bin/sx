@@ -34,6 +34,9 @@ sx — Sconix Systems
   sx rollback <app> <release> --plan [user@host]
   sx rollback <app> <release> --approve <plan-id> [user@host]
                           restore a release's code/containers; never reverses DB migrations
+  sx canary <app> --plan [user@host]
+  sx canary <app> --approve <plan-id> [user@host]
+                          isolated stack + route; verify before promotion
   sx restart <app> [user@host]
                           restart a deployed app's containers in place (no rebuild)
   sx doctor               check the toolchain
@@ -288,7 +291,7 @@ REMOTE
     echo ":: register $APP_DOMAIN with the edge"
     ssh "$host" "set -e
       test -f /srv/$proj/Caddyfile.site || { echo 'no Caddyfile.site — old-style app? redeploy after sx sync'; exit 1; }
-      sed 's|__DOMAIN__|$APP_DOMAIN|g' /srv/$proj/Caddyfile.site > /srv/edge/sites/$proj.caddy
+      sed -e 's|__DOMAIN__|$APP_DOMAIN|g' -e 's|__API_UPSTREAM__|$proj-api|g' -e 's|__WEB_UPSTREAM__|$proj-web|g' /srv/$proj/Caddyfile.site > /srv/edge/sites/$proj.caddy
       rm -f /srv/edge/sites/_placeholder.caddy
       docker compose -f /srv/edge/compose.yml exec -T caddy caddy reload --config /etc/caddy/Caddyfile"
 
@@ -358,6 +361,57 @@ REMOTE
     trap - ERR
     printf -- '- **%s** — rollback %s -> %s\n' "$(date '+%Y-%m-%d %H:%M')" "$proj" "$release" >> "$SYSTEMS/ledger.md"
     echo ":: rollback verified"
+    ;;
+
+  canary)
+    proj="${1:?usage: sx canary <app> --plan|--approve <plan-id> [user@host]}"
+    shift
+    dir="$APPS/$proj"
+    [ -d "$dir" ] || { echo "no such app: $proj"; exit 1; }
+    [ -f "$dir/deploy.env" ] && . "$dir/deploy.env"
+    mode="${1:-}"; shift || true
+    plan_id=""
+    if [ "$mode" = "--approve" ]; then plan_id="${1:?plan id required}"; shift
+    elif [ "$mode" != "--plan" ]; then echo "canary requires --plan or --approve"; exit 1
+    fi
+    host="${1:-${DEPLOY_HOST:-}}"
+    [ -n "$host" ] && [ -n "${APP_DOMAIN:-}" ] || { echo "host and APP_DOMAIN required"; exit 1; }
+    canary_domain="${CANARY_DOMAIN:-canary.$APP_DOMAIN}"
+    actor="${SCONIX_PRINCIPAL:-${USER:-operator}}"
+    ( cd "$dir" && git diff --quiet && git diff --cached --quiet ) || { echo "commit changes in $proj first"; exit 1; }
+    if [ "$mode" = "--plan" ]; then
+      "$CORE_DEPLOY" plan "$proj" --root "$dir" --host "$host" --domain "$canary_domain" \
+        --by "$actor" --action canary
+      exit 0
+    fi
+    "$CORE_DEPLOY" verify "$plan_id" --root "$dir" --host "$host" --domain "$canary_domain" \
+      --action canary >/dev/null
+    slot="$proj-canary-${plan_id:0:8}"
+    release_id="$(git -C "$dir" rev-parse --short=12 HEAD)-$plan_id"
+    remote_release="/srv/releases/$proj/$release_id"
+    canary_failed() {
+      ssh "$host" "cd '$remote_release' 2>/dev/null && SCONIX_SLOT='$slot' docker compose -p '$slot' --profile prod down -v || true; rm -f '/srv/edge/sites/$slot.caddy'; docker compose -f /srv/edge/compose.yml exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 || true" >/dev/null 2>&1 || true
+      "$CORE_DEPLOY" complete "$plan_id" --status failed --evidence "canary failed and was torn down" >/dev/null 2>&1 || true
+    }
+    trap canary_failed ERR
+    echo ":: vendor sconixapp -> $proj/_sconixapp"
+    rm -rf "$dir/_sconixapp"
+    rsync -a --exclude .git --exclude .venv --exclude __pycache__ --exclude '*.egg-info' \
+      --exclude .ruff_cache --exclude .pytest_cache "$APPLIB/" "$dir/_sconixapp/"
+    secrets_rsync=""; [ -f "$dir/secrets.env" ] && secrets_rsync="--exclude .env"
+    ssh "$host" "set -e; umask 077; mkdir -p '/srv/releases/$proj'; test ! -e '$remote_release'; rm -rf '$remote_release.tmp'; mkdir '$remote_release.tmp'"
+    rsync -az --delete --exclude .git --exclude node_modules --exclude .venv --exclude .next \
+      --exclude __pycache__ --exclude '*.db' --exclude .turbo --exclude docker-compose.override.yml \
+      $secrets_rsync "$dir/" "$host:$remote_release.tmp/"
+    ssh "$host" "set -e; mv '$remote_release.tmp' '$remote_release'; cd '$remote_release'; if [ -f secrets.env ]; then SOPS_AGE_KEY_FILE=\$HOME/.config/sops/age-key.txt sops -d secrets.env > .env; fi; touch .env; grep -q '^APP_DOMAIN=' .env || echo 'APP_DOMAIN=$canary_domain' >> .env; SCONIX_SLOT='$slot' docker compose -p '$slot' --profile prod build; SCONIX_SLOT='$slot' docker compose -p '$slot' --profile prod up -d; SCONIX_SLOT='$slot' docker compose -p '$slot' exec -T api alembic -c api/alembic.ini upgrade head"
+    echo ":: register isolated canary route $canary_domain"
+    ssh "$host" "set -e; sed -e 's|__DOMAIN__|$canary_domain|g' -e 's|__API_UPSTREAM__|$slot-api|g' -e 's|__WEB_UPSTREAM__|$slot-web|g' '$remote_release/Caddyfile.site' > '/srv/edge/sites/$slot.caddy'; docker compose -f /srv/edge/compose.yml exec -T caddy caddy reload --config /etc/caddy/Caddyfile"
+    echo ":: verify canary through shared edge network"
+    ssh "$host" "docker exec sconix-edge wget -qO- 'http://$slot-api:8000/healthz' >/dev/null && docker exec sconix-edge wget -qO- 'http://$slot-api:8000/readyz' >/dev/null"
+    "$CORE_DEPLOY" complete "$plan_id" --status verified --evidence "isolated canary healthz and readyz passed at $canary_domain" >/dev/null
+    trap - ERR
+    printf -- '- **%s** — canary %s -> %s (%s)\n' "$(date '+%Y-%m-%d %H:%M')" "$proj" "$canary_domain" "$release_id" >> "$SYSTEMS/ledger.md"
+    echo ":: canary verified at https://$canary_domain (slot $slot)"
     ;;
 
   restart)

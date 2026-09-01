@@ -90,3 +90,24 @@ def test_rollback_plan_is_bound_to_release(project: Path) -> None:
             action="rollback",
             release="different-release",
         )
+
+
+def test_canary_plan_is_bound_to_canary_domain(project: Path) -> None:
+    plan = create_plan(
+        project="demo",
+        project_root=project,
+        host="deploy@example",
+        domain="canary.demo.example",
+        principal=operator(),
+        action="canary",
+    )
+    approve_plan(plan["id"], operator(), "run isolated canary")
+    assert plan["action"]["argv"][:3] == ["sx", "canary", "demo"]
+    with pytest.raises(DeployRecordError, match="domain"):
+        verify_plan(
+            plan["id"],
+            project,
+            "deploy@example",
+            "other.demo.example",
+            action="canary",
+        )

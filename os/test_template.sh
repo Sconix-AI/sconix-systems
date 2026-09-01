@@ -22,6 +22,8 @@ test -f web/package.json
 test -f docker-compose.yml
 test -f Caddyfile.site
 test -f sconix.yaml
+grep -q '__API_UPSTREAM__' Caddyfile.site
+grep -q 'SCONIX_SLOT' docker-compose.yml
 # leaked Jinja looks like `{{ var }}` / `{% ... %}` / `{# ... #}`; JSX inline
 # objects (`={{`, `{{ ... }}` without a bare identifier) are fine.
 ! grep -rnE '\{\{ [a-z_]+ \}\}|\{%[-+ ]|\{#' api web packages \
