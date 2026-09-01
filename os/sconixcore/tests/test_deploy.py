@@ -2,9 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from sconixcore import Principal, PrincipalKind
+from sconixcore import DeployRecordError, Principal, PrincipalKind, load_record
 from sconixcore.deploy import (
-    DeployRecordError,
     approve_plan,
     complete_plan,
     create_plan,
@@ -51,6 +50,17 @@ def test_plan_requires_separate_approval_and_is_consumed_once(project: Path) -> 
     with pytest.raises(DeployRecordError, match="consumed"):
         verify_plan(plan["id"], project, "deploy@example", "demo.example")
     complete_plan(plan["id"], status="verified", evidence="healthz ok")
+
+
+def test_plan_records_are_readable_from_public_api(project: Path) -> None:
+    plan = create_plan(
+        project="demo",
+        project_root=project,
+        host="deploy@example",
+        domain="demo.example",
+        principal=operator(),
+    )
+    assert load_record("plans", plan["id"])["id"] == plan["id"]
 
 
 def test_plan_rejects_changed_git_head(project: Path) -> None:

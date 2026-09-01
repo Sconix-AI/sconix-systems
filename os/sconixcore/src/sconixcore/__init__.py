@@ -10,6 +10,7 @@ from sconixcore.contracts import (
     Risk,
     Verification,
 )
+from sconixcore.deploy import DeployRecordError, load_record
 from sconixcore.executor import (
     ActionError,
     ExecutionResult,
@@ -26,6 +27,7 @@ __all__ = [
     "ApprovalMode",
     "Decision",
     "DecisionOutcome",
+    "DeployRecordError",
     "Inspection",
     "ExecutionResult",
     "ManifestError",
@@ -37,6 +39,7 @@ __all__ = [
     "execute_action",
     "inspect_project",
     "lookup_action",
+    "load_record",
     "resolve_action",
 ]
 __version__ = "0.1.0"
