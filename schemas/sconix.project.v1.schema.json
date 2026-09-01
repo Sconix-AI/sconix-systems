@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sconix.dev/project/v1",
+  "title": "Sconix Project Manifest v1",
+  "type": "object",
+  "required": ["schema", "kind", "name", "slug", "lifecycle"],
+  "properties": {
+    "schema": {"const": "sconix.dev/project/v1"},
+    "kind": {"enum": ["application", "research"]},
+    "name": {"type": "string", "minLength": 1},
+    "slug": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"},
+    "summary": {"type": "string"},
+    "created": {"type": "string", "format": "date"},
+    "profile": {"$ref": "#/$defs/versionedReference"},
+    "lifecycle": {
+      "type": "object", "required": ["status"], "additionalProperties": false,
+      "properties": {
+        "status": {"enum": ["draft", "active", "live", "paused", "parked", "completed", "abandoned"]},
+        "statusChangedAt": {"type": "string", "format": "date-time"}
+      }
+    },
+    "question": {"type": "string"},
+    "tags": {"type": "array", "items": {"type": "string"}, "uniqueItems": true, "default": []},
+    "endpoints": {"type": "object", "additionalProperties": {"type": "string", "format": "uri"}},
+    "capabilities": {"type": "object", "additionalProperties": {"$ref": "#/$defs/capability"}},
+    "commands": {"type": "object", "additionalProperties": {"$ref": "#/$defs/command"}},
+    "agents": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "instructions": {"type": "array", "items": {"type": "string"}},
+        "context": {"type": "array", "items": {"type": "string"}},
+        "policies": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  },
+  "allOf": [{"if": {"properties": {"kind": {"const": "research"}}, "required": ["kind"]}, "then": {"required": ["question"]}}],
+  "patternProperties": {"^x-[a-z0-9][a-z0-9-]*$": {}},
+  "additionalProperties": false,
+  "$defs": {
+    "versionedReference": {
+      "type": "object", "required": ["name"], "additionalProperties": false,
+      "properties": {"name": {"type": "string", "minLength": 1}, "version": {"type": "string", "minLength": 1}}
+    },
+    "capability": {
+      "type": "object", "required": ["provider"], "additionalProperties": false,
+      "properties": {
+        "provider": {"type": "string", "minLength": 1}, "version": {"type": "string"},
+        "required": {"type": "boolean", "default": true}, "config": {"type": "object"}
+      }
+    },
+    "command": {
+      "type": "object", "required": ["run", "risk"], "additionalProperties": false,
+      "properties": {
+        "description": {"type": "string"}, "run": {"type": "string", "minLength": 1},
+        "risk": {"enum": ["read-only", "local-write", "external-write", "destructive"]},
+        "approval": {"enum": ["never", "policy", "always"], "default": "policy"},
+        "timeoutSeconds": {"type": "integer", "minimum": 1},
+        "verify": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    }
+  }
+}
