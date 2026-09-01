@@ -8,6 +8,7 @@ SYSTEMS="$HOME/systems"
 TEMPLATE="$OS/template-web"
 APPLIB="$OS/sconixapp"
 CORE_DEPLOY="$OS/sconixcore/.venv/bin/sconix-deploy"
+CORE_INSPECT="$OS/sconixcore/.venv/bin/sconix-inspect"
 
 usage() {
   cat <<'EOF'
@@ -89,7 +90,9 @@ case "$cmd" in
     [ -d "$APPS" ] || { echo "no apps yet"; exit 0; }
     for p in "$APPS"/*/; do
       [ -d "$p" ] || continue
-      s=$(grep -m1 '^status:' "$p/app.yaml" 2>/dev/null | awk '{print $2}')
+      s=$("$CORE_INSPECT" "$p" --json 2>/dev/null \
+        | python3 -c 'import json,sys; print(json.load(sys.stdin)["manifest"]["lifecycle"]["status"])' \
+        2>/dev/null || true)
       printf "  %-28s %s\n" "$(basename "$p")" "${s:-?}"
     done
     ;;
@@ -392,6 +395,8 @@ REMOTE
     [ -f "$TEMPLATE/copier.yml" ] && echo "template-web ok" || echo "MISSING $TEMPLATE/copier.yml"
     printf "  %-9s " "applib"
     [ -f "$APPLIB/pyproject.toml" ] && echo "sconixapp ok" || echo "MISSING $APPLIB"
+    printf "  %-9s " "core"
+    [ -x "$CORE_INSPECT" ] && echo "sconixcore ok" || echo "run: uv sync --project $OS/sconixcore"
     printf "  %-9s " "apps"
     echo "$(find "$APPS" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l) scaffolded"
     ;;

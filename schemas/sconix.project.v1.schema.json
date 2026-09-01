@@ -53,8 +53,18 @@
       "properties": {
         "description": {"type": "string"},
         "run": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "arguments": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+          "uniqueItems": true,
+          "default": []
+        },
         "risk": {"enum": ["read-only", "local-write", "external-write", "destructive"]},
         "approval": {"enum": ["never", "policy", "always"], "default": "policy"},
+        "idempotent": {"type": "boolean", "default": false},
+        "sideEffects": {"type": "array", "items": {"type": "string"}},
+        "preconditions": {"type": "array", "items": {"type": "string"}},
+        "rollback": {"type": ["string", "null"]},
         "timeoutSeconds": {"type": "integer", "minimum": 1},
         "verify": {"$ref": "#/$defs/verification"}
       }

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import date, datetime
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
@@ -65,6 +66,16 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     value = yaml.safe_load(path.read_text())
     if not isinstance(value, dict):
         raise ManifestError(f"manifest must be a mapping: {path}")
+    return _json_value(value)
+
+
+def _json_value(value: Any) -> Any:
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {key: _json_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_value(item) for item in value]
     return value
 
 

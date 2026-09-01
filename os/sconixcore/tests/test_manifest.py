@@ -66,6 +66,16 @@ def test_native_manifest_takes_precedence(tmp_path: Path) -> None:
     assert result.manifest["name"] == "New"
 
 
+def test_native_yaml_date_is_normalized_for_json(tmp_path: Path) -> None:
+    (tmp_path / "sconix.yaml").write_text(
+        "schema: sconix.dev/project/v1\n"
+        "kind: application\nname: Demo\nslug: demo\ncreated: 2026-08-31\n"
+        "lifecycle: {status: active}\n"
+    )
+    result = inspect_project(tmp_path, strict=True)
+    assert result.manifest["created"] == "2026-08-31"
+
+
 def test_strict_mode_rejects_invalid_manifest(tmp_path: Path) -> None:
     write_yaml(tmp_path / "app.yaml", {"name": "Broken", "slug": "Not Portable"})
     with pytest.raises(ManifestError, match="invalid manifest"):

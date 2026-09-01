@@ -6,12 +6,19 @@ tasks:
     desc: Test sconixapp + generate a demo app and check it lints/imports
     cmds:
       - task: test-lib
+      - task: test-core
       - task: test-template
 
   test-lib:
     dir: sconixapp
     cmds:
       - TMPDIR=/tmp uv run pytest
+
+  test-core:
+    dir: sconixcore
+    cmds:
+      - TMPDIR=/tmp uv run pytest
+      - TMPDIR=/tmp uv run ruff check .
 
   test-template:
     desc: copier-generate a throwaway app, uv sync + ruff + pytest the api
